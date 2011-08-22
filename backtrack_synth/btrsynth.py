@@ -176,6 +176,143 @@ def LTL_world(W, var_prefix="obs"):
     return out_str
 
 
+def gen_navobs_soln(init_list, goal_list, W, num_obs, env_goal_list,
+                    var_prefix="X", fname_prefix="tempsyn", env_prefix="Y",
+                    disjunction_goals=False, env_disjunction_goals=False):
+    """Generate solution as in gen_dsoln but now with dynamic obstacles.
+
+    This is a limited extension to the problem considered in
+    gen_dsoln. Here we introduce a finite number (num_obs) of
+    obstacles that navigate in the map W, thus requiring a reactive
+    controller to safely avoid them while visiting the goal locations
+    infinitely often.
+
+    env_goal_list is a list of locations that must be visited by the
+    environment obstacles infinitely often.  This reduces the
+    likelihood that a permissible env strategy is to corner the
+    vehicle forever.  If env_goal_list has length greater than one,
+    these locations can be combined in a conjunctive or disjunctive
+    form, by setting env_disjunction_goals.  See comments in gen_dsoln.
+
+    Return instance of tulip.automaton.Automaton on success;
+    None if error.
+    """
+    # Argument error checking
+    if (len(init_list) == 0) or (num_obs < 0):
+        return None
+
+    # Handle degenerate case of no obstacles (thus, deterministic problem).
+    if num_obs < 1:
+        return gen_dsoln(init_list=init_list, goal_list=goal_list, W=W,
+                         var_prefix=var_prefix, fname_prefix=fname_prefix,
+                         disjunction_goals=disjunction_goals)
+
+    ########################################
+    # Environment prep
+    env_str = [LTL_world(W, var_prefix="e."+env_prefix+"_"+str(k)) \
+                   for k in range(num_obs)]
+
+    env_goal_str = ""
+    if not env_disjunction_goals:
+        for obs_ind in range(num_obs):
+            for loc in env_goal_list:
+                if len(env_goal_str) > 0:
+                    env_goal_str += " & "
+                env_goal_str += "[]<>(" + "e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+    else:
+        for obs_ind in range(num_obs):
+            if len(env_goal_str) > 0:
+                env_goal_str += " & "
+            for loc in env_goal_list:
+                if len(env_goal_str) == 0:
+                    env_goal_str += "[]<>( e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1])
+                env_goal_str += " | e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1])
+            env_goal_str += " )"
+    
+    ########################################
+    # Sys prep
+    safety_str = LTL_world(W, var_prefix="s."+var_prefix)
+
+    init_str = ""
+    for loc in init_list:
+        if len(init_str) > 0:
+            init_str += " | "
+        init_str += "(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+
+    goal_str = ""
+    if not disjunction_goals:
+        for loc in goal_list:
+            if len(goal_str) > 0:
+                goal_str += " & "
+            goal_str += "[]<>(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+    else:
+        for loc in goal_list:
+            if len(goal_str) == 0:
+                goal_str += "[]<>( s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+            goal_str += " | s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+        goal_str += " )"
+
+    ########################################
+    # Interaction: avoid collisions
+    coll_str = ""
+    for i in range(W.shape[0]):
+        for j in range(W.shape[1]):
+            if len(coll_str) == 0:
+                coll_str += "[]( "
+            else:
+                coll_str += " & "
+            coll_str += "!(" + "s."+var_prefix+"_"+str(i)+"_"+str(j)
+            for obs_ind in range(num_obs):
+                coll_str += " & e."+env_prefix+"_"+str(obs_ind)+"_"+str(i)+"_"+str(j)
+            coll_str += ")"
+    coll_str += ")"
+            
+
+    ########################################
+    # Create SMV file
+    with open(fname_prefix+".smv", "w") as f:
+        # Some parts of this code are copied from tulip/rhtlp.py
+        f.write("MODULE main \n")
+        f.write("\tVAR\n")
+        f.write("\t\te : env();\n")
+        f.write("\t\ts : sys();\n\n")
+        f.write("MODULE sys \n")
+        f.write("\tVAR\n")
+        for i in range(W.shape[0]):
+            for j in range(W.shape[1]):
+                f.write("\t\t" + var_prefix+"_"+str(i)+"_"+str(j) + " : boolean;\n")
+        f.write("MODULE env \n")
+        f.write("\tVAR\n")
+        for obs_ind in range(num_obs):
+            for i in range(W.shape[0]):
+                for j in range(W.shape[1]):
+                    f.write("\t\t" + env_prefix+"_"+str(obs_ind)+"_"+str(i)+"_"+str(j) + " : boolean;\n")
+
+    # Create SPC file
+    with open(fname_prefix+".spc", "w") as f:
+        f.write("LTLSPEC\n")
+        f.write("(" + init_str+") & \n" + env_goal_str + " & \n")
+        for obs_ind in range(num_obs):
+            f.write(env_str[obs_ind])
+        f.write("\n;\n\nLTLSPEC\n")
+        f.write(goal_str + " & \n" + safety_str)
+        f.write(" & \n" + coll_str)
+        f.write("\n;")
+    
+    # Try JTLV synthesis
+    tulip.grgameint.solveGame(smv_file=fname_prefix+".smv",
+                              spc_file=fname_prefix+".spc",
+                              init_option=1, file_exist_option="r")
+
+    return tulip.automaton.Automaton(fname_prefix+".aut")
+
+
+def navobs_sim():
+    """Sister to dsim, but now for solutions from gen_navobs_soln.
+    """
+    pass
+
+
 def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn",
               disjunction_goals=False):
     """Generate deterministic solution, given initial and goal states.
@@ -190,7 +327,8 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn",
     goal position to occur infinitely often, hence one []<>... formula
     per goal.
     
-    Return instance of tulip.Automaton on success; None if error.
+    Return instance of tulip.automaton.Automaton on success;
+    None if error.
     """
     if len(init_list) == 0:
         return None
@@ -203,7 +341,6 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn",
             init_str += " | "
         init_str += "(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
 
-    
     goal_str = ""
     if not disjunction_goals:
         for loc in goal_list:
@@ -231,14 +368,12 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn",
                 f.write("\t\t" + var_prefix+"_"+str(i)+"_"+str(j) + " : boolean;\n")
         f.write("MODULE env \n")
         f.write("\tVAR\n")
-        #f.write("\t\tfoo : boolean;\n")
 
     # Create SPC file
     with open(fname_prefix+".spc", "w") as f:
-        #f.write("LTLSPEC\n[]<>e.foo\n;\n\nLTLSPEC\n")
         f.write("LTLSPEC\n;\n\nLTLSPEC\n")
-        f.write("("+init_str+")" + " & \n" + goal_str + " & \n" + safety_str)
-        f.write("\n;\n")
+        f.write("("+init_str+") & \n" + goal_str + " & \n" + safety_str)
+        f.write("\n;")
     
     # Try JTLV synthesis
     tulip.grgameint.solveGame(smv_file=fname_prefix+".smv",
