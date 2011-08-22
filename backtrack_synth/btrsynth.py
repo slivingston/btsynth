@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-SCL; 2011 Aug 19, draft
+SCL; 2011 Aug 22, draft
 """
 
 import numpy as np
@@ -176,12 +176,19 @@ def LTL_world(W, var_prefix="obs"):
     return out_str
 
 
-def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn"):
+def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn",
+              disjunction_goals=False):
     """Generate deterministic solution, given initial and goal states.
 
     init_list is a list of pairs (row, col), signifying locations in
     the world matrix W from which the system can be initialized.
     Similarly for goal_list, but locations to visit infinitely often.
+
+    If disjunction_goals is True, then the given goal positions appear
+    in a single []<>... formula, combined in a disjunction (i.e. "or"
+    statements).  The default (disjunction_goals = False) is for each
+    goal position to occur infinitely often, hence one []<>... formula
+    per goal.
     
     Return instance of tulip.Automaton on success; None if error.
     """
@@ -196,11 +203,19 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn"):
             init_str += " | "
         init_str += "(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
 
+    
     goal_str = ""
-    for loc in goal_list:
-        if len(goal_str) > 0:
-            goal_str += " & "
-        goal_str += "[]<>(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+    if not disjunction_goals:
+        for loc in goal_list:
+            if len(goal_str) > 0:
+                goal_str += " & "
+            goal_str += "[]<>(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+    else:
+        for loc in goal_list:
+            if len(goal_str) == 0:
+                goal_str += "[]<>( s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+            goal_str += " | s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+        goal_str += " )"
 
     # Create SMV file
     with open(fname_prefix+".smv", "w") as f:
@@ -281,6 +296,22 @@ def dsim(init, aut, W_actual, var_prefix="X"):
         if W_actual[next_loc[0]][next_loc[1]] == 1:
             return history, next_loc
         history.append(next_loc)
+
+
+def btsim_d(init, aut, W_actual, var_prefix="X"):
+    """Backtrack/patching algorithm, applied to deterministic problem.
+
+    Note that this case is elementary and, being non-adversarial, may
+    be better addressed by other methods (e.g., graph search or D*).
+    Nonetheless it provides a decent base case for testing the idea.
+
+    Returns an updated (to reflected the corrected controller)
+    instance of tulip.automaton.Automaton and the known world map at
+    time of completion.  Note that the ``known world'' may not match
+    the given W_actual, because some parts of the world may never be
+    visited (hence, uncertainty not corrected).
+    """
+    pass
 
 
 def extract_coord(var_name):
