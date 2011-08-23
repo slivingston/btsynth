@@ -39,21 +39,23 @@ if __name__ == "__main__":
         print "Usage: %s FILE-NOM FILE-REAL" % sys.argv[0]
         exit(1)
 
-    init = (2,2)
-    goal_list = [(2,2)]
-    num_obs = 1
+    # init = (2,2)
+    # goal_list = [(2,2)]
+    # num_obs = 1
+    init = (0,0)
+    goal_list  = [(0,3), (5,0)]
 
     W = read_worldf(sys.argv[1])
     W_actual = read_worldf(sys.argv[2])
     print "Nominal world:"
     print pretty_world(W)
     print "Trying to solve..."
-    aut = gen_navobs_soln(init_list=[init],
-                          goal_list=goal_list,
-                          W=W, num_obs=num_obs, env_goal_list=[(2,0)])
-    # aut = gen_dsoln(init_list=[init,],
-    #                 goal_list=goal_list,
-    #                 W=W)
+    # aut = gen_navobs_soln(init_list=[init],
+    #                       goal_list=goal_list,
+    #                       W=W, num_obs=num_obs, env_goal_list=[(2,0)])
+    aut = gen_dsoln(init_list=[init,],
+                    goal_list=goal_list,
+                    W=W)
     print "Resulting solution automaton M has %d nodes." % aut.size()
     aut.trimDeadStates()
     print "After trimming dead nodes, M has size %d" % aut.size()
@@ -69,9 +71,11 @@ if __name__ == "__main__":
 
     # print "dsim..."
     # simresult = dsim(init, aut, W_actual)
-    print "navobs_sim..."
-    simresult = navobs_sim(init, aut, W_actual, num_obs=num_obs)
-
-    print pretty_world(W_actual, simresult)
+    # print "navobs_sim..."
+    # simresult = navobs_sim(init, aut, W_actual, num_obs=num_obs)
+    # print pretty_world(W_actual, simresult)
     
-    # aut.writeDotFile(fname="tempsyn-PATCHED.dot", hideZeros=True)
+    print "sim and patch..."
+    aut_patched = btsim_d(init, goal_list, aut, W_actual, num_steps=100)
+    
+    aut_patched[0].writeDotFile(fname="tempsyn-PATCHED.dot", hideZeros=True)

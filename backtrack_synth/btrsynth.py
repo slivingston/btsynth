@@ -468,7 +468,7 @@ def dsim(init, aut, W_actual, var_prefix="X", num_it=100):
     action, since we are treating deterministic problem setting).
 
     num_it is like a watchdog timer. Only num_it iterations will
-    execute before quiting (regardless of failure occurring).
+    execute before quitting (regardless of failure occurring).
 
     If initial location is not even possible, then return initial
     location and None (rather than intended action).
@@ -479,6 +479,10 @@ def dsim(init, aut, W_actual, var_prefix="X", num_it=100):
     # Handle initialization as a special case.
     if W_actual[init[0]][init[1]] == 1:
         return init, None
+
+    # Special case of initial location possible and zero iterations run.
+    if num_it == 0:
+        return init, True
     
     # Main simulation execution
     i, j = init
@@ -505,21 +509,211 @@ def dsim(init, aut, W_actual, var_prefix="X", num_it=100):
     return history, True
 
 
-def btsim_d(init, aut, W_actual, var_prefix="X"):
+def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="X"):
     """Backtrack/patching algorithm, applied to deterministic problem.
 
     Note that this case is elementary and, being non-adversarial, may
     be better addressed by other methods (e.g., graph search or D*).
     Nonetheless it provides a decent base case for testing the idea.
 
-    Returns an updated (to reflected the corrected controller)
+    num_steps is the number of simulation steps to run; this count is
+    across corrections.  That is, the basic execution sequence is
+      1. sim to fault or num_steps reached;
+      2. if fault, run backtrack/patch algorithm to improve automaton;
+        goto step 1 (after updating aut)
+      3. else (total step count num_steps reached), quit.
+    
+    (Note that this is not quite num_it as in the function dsim.)
+
+    Returns an updated (to reflect the corrected controller)
     instance of tulip.automaton.Automaton and the known world map at
     time of completion.  Note that the ``known world'' may not match
     the given W_actual, because some parts of the world may never be
     visited (hence, uncertainty not corrected).
     """
-    pass
+    step_count = 0
+    while True:
+        if step_count == num_steps:
+            return aut, None
 
+        # Loop invariants
+        if num_steps-step_count < 0:
+            raise ValueError("overstepped bt dsim loop.")
+        
+        # Sim
+        history, intent = dsim(init, aut, W_actual, var_prefix=var_prefix,
+                               num_it=num_steps-step_count)
+        if intent is True:
+            return aut, None
+        step_count += len(history)
+
+        # Patch (terminology follows that of the paper)
+        gamma = 1  # radius
+        delta = 1  # increment
+        nbhd_inclusion = []  # Use Manhattan distance as metric
+        # for i in range(history[-1][0]-gamma, history[-1][0]+gamma+1):
+        #     for j in range(history[-1][1]-gamma, history[-1][1]+gamma+1):
+        for i in range(intent[0]-gamma, intent[0]+gamma+1):
+            for j in range(intent[1]-gamma, intent[1]+gamma+1):
+                if i >= 0 and i < W_actual.shape[0] \
+                        and j >= 0 and j < W_actual.shape[1]:
+                    nbhd_inclusion.append((i, j))
+        if len(nbhd_inclusion) == 0:
+            raise ValueError("gamma radius is too small; neighborhood is empty.")
+        patch_goal_list = []
+        for v in nbhd_inclusion:
+            if v in goal_list:
+                patch_goal_list.append(v)
+        fail_loc_var = var_prefix+"_"+str(intent[0])+"_"+str(intent[1])
+        S_block = aut.findAllAutPartState({fail_loc_var : 1})
+        S_Pre = []
+        for node in aut.states:
+            for bad_node in S_block:
+                if bad_node.id in node.transition:
+                    for bad_node_redund in S_block:
+                        # To ensure S_Pre has empty intersection with S_block
+                        if node.id == bad_node_redund.id:
+                            break
+                    S_Pre.append(node)
+                    break
+        S_Post = {}
+        # Dictionary with keys of IDs of nodes in S_Pre, and values in
+        # S\S_block (AutomatonState instances), thus
+        # expressing a reachability relationship (or ``branchout set''
+        # in the terminology of the paper).
+        for node in S_Pre:
+            S_Post[node.id] = []
+            for bad_node in S_block:
+                if bad_node.id in node.transition:
+                    for post_node_id in bad_node.transition:
+                        post_node = aut.getAutState(post_node_id)
+                        if post_node == -1:
+                            raise ValueError("inconsistent edge labelling in automaton.")
+                        if post_node in S_block:
+                            continue  # Do not include outgoing edges going back to S_block.
+                        S_Post[node.id].append(post_node)
+        for exit_node in S_Post.values():
+            # This deviates from the algorithm! (a convenience hack; may fail)
+            patch_goal_list.append(extract_autcoord(exit_node[0],
+                                                    var_prefix=var_prefix)[0])
+        W_patch, offset = subworld(W_actual, nbhd_inclusion)
+        # Shift coordinates to be w.r.t. W_patch
+        for ind in range(len(patch_goal_list)):
+            patch_goal_list[ind] = (patch_goal_list[ind][0]-offset[0],
+                                    patch_goal_list[ind][1]-offset[1])
+        init_loc = (history[-1][0]-offset[0], history[-1][1]-offset[1])
+        aut_patch = gen_dsoln([init_loc], patch_goal_list, W_patch)
+        # Merge (in several steps)
+
+        # Trim bad nodes from aut; note that we just delete ingoing
+        # and outgoing edges from all nodes in S_block.  The result is
+        # a set of ``floater'' nodes.
+        for ind in range(len(S_Pre)):
+            for bad_ind in range(len(S_block)):
+                try:
+                    S_Pre[ind].transition.remove(S_block[bad_ind].id)
+                except ValueError:
+                    pass
+                S_block[bad_ind].transition = []
+
+        # Import all nodes from M_patch into M. Keep track of the
+        # assigned IDs.
+        max_id = -1
+        for node in aut.states:
+            if node.id > max_id:
+                max_id = node.id
+        # Offset all IDs in M_patch by max_id+1
+        for node in aut_patch.states:
+            node.transition = [max_id+1+k for k in node.transition]
+            node.id += max_id+1
+            (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
+            node.state[var_prefix+"_"+str(i)+"_"+str(j)] = 0
+            node.state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
+            aut.addAutState(node)
+
+        # Add offset back in
+        for ind in range(len(patch_goal_list)):
+            patch_goal_list[ind] = (patch_goal_list[ind][0]+offset[0],
+                                    patch_goal_list[ind][1]+offset[1])
+        init_loc = (history[-1][0]+offset[0], history[-1][1]+offset[1])
+
+        # Patch-in edges
+
+        for ind in range(len(S_Pre)):
+            for new_ind in range(len(aut_patch.states)):
+                if extract_autcoord(S_Pre[ind], var_prefix=var_prefix)[0] == extract_autcoord(aut_patch.states[new_ind], var_prefix=var_prefix)[0]:
+                    # Should be breadth-first search to find out-paths into S_Post[S_Pre[ind].id]
+                    S_Pre[ind].transition = aut_patch.states[new_ind].transition[:]
+                    # for node_ind in range(len(aut.states)):
+                    #     if node_ind < max_id+1:
+                    #         continue
+                    #         # for trans_ind in range(len(aut.states[node_ind].transition)):
+                    #         #     if aut.states[node_ind].transition[trans_ind] == aut_patch.states[new_ind].id:
+                    #         #         aut.states[node_ind].transition[trans_ind] = S_Pre[ind].id
+                    #     else:
+                    #         for trans_ind in range(len(aut.states[node_ind].transition)):
+                    #             if aut.states[node_ind].transition[trans_ind] == aut_patch.states[new_ind].id:
+                    #                 del aut.states[node_ind].transition[trans_ind]
+                    break
+
+        for patch_goal in patch_goal_list:
+            for new_ind in range(len(aut_patch.states)):
+                if extract_autcoord(aut_patch.states[new_ind], var_prefix=var_prefix)[0] != patch_goal:
+                    continue
+                for pre_node in S_Pre:
+                    for post_ind in range(len(S_Post[pre_node.id])):
+                        if extract_autcoord(S_Post[pre_node.id][post_ind], var_prefix=var_prefix)[0] == patch_goal:
+                            for node_ind in range(len(aut.states)):
+                                # if node_ind < max_id+1:
+                                #     continue
+                                for trans_ind in range(len(aut.states[node_ind].transition)):
+                                    if aut.states[node_ind].transition[trans_ind] == aut_patch.states[new_ind].id:
+                                        aut.states[node_ind].transition[trans_ind] = S_Post[pre_node.id][post_ind].id
+                            break
+
+
+def subworld(W, subregion):
+    """Return submatrix of W based on given subregion, and its offset.
+
+    subregion should be a list of locations, preferably contiguous.
+    The bounding rectangle of subregion is used to determine
+    submatrix.
+    """
+    min_r = W.shape[0]
+    max_r = -1
+    min_c = W.shape[1]
+    max_c = -1
+    for k in subregion:
+        if k[0] < min_r:
+            min_r = k[0]
+        if k[0] > max_r:
+            max_r = k[0]
+        if k[1] < min_c:
+            min_c = k[1]
+        if k[1] > max_c:
+            max_c = k[1]
+    return W[min_r:(max_r+1), min_c:(max_c+1)], (min_r, min_c)
+
+def to_formula(aut_node):
+    """Take the given automaton node and return formula equivalent to state.
+
+    NOTE: ...this function, or one like it, may be general enough to
+    place in the tulip.automaton module directly.
+
+    ASSUMES ALL VARIABLES APPEARING IN GIVEN NODE ARE BOOLEAN.
+
+    Returns string type.
+    """
+    out_str = ""
+    for (k, v) in aut_node.state.items():
+        if len(out_str) > 0:
+            out_str += " & "
+        if v > 0:
+            out_str += "("
+        else:
+            out_str += "(!"
+        out_str += k+")"
+    return out_str
 
 def extract_autcoord(aut_node, var_prefix="X"):
     """Pick out first true variable with name matching prefix_R_C format.
