@@ -303,7 +303,8 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs, env_goal_list,
     # Try JTLV synthesis
     tulip.grgameint.solveGame(smv_file=fname_prefix+".smv",
                               spc_file=fname_prefix+".spc",
-                              init_option=1, file_exist_option="r")
+                              init_option=1, file_exist_option="r",
+                              heap_size="-Xmx2048m")
 
     return tulip.automaton.Automaton(fname_prefix+".aut")
 
@@ -417,18 +418,12 @@ def dsim(init, aut, W_actual, var_prefix="X"):
     while True:
         next_node = aut.findNextAutState(next_node, env_state={},
                                          deterministic_env=True)
-        next_loc = None
-        for (k, v) in next_node.state.items():
-            if v != 1:  # We are only interested in True variables
-                continue
-            k_parts = k.split("_")
-            if len(k_parts) < 3:  # Conforms to locative naming scheme?
-                continue
-            if "_".join(k_parts[:-2]) == var_prefix:
-                next_loc = extract_coord(k)
-                break
+        next_loc = extract_autcoord(next_node, var_prefix=var_prefix)
         if next_loc is None:
             raise ValueError("Given automaton is incomplete; reached deadend.")
+        if len(next_loc) > 1:
+            raise ValueError("Given automaton invalid; more than one locative prop true, despite mutual exclusion.")
+        next_loc = next_loc[0]
         if W_actual[next_loc[0]][next_loc[1]] == 1:
             return history, next_loc
         history.append(next_loc)
@@ -449,6 +444,29 @@ def btsim_d(init, aut, W_actual, var_prefix="X"):
     """
     pass
 
+
+def extract_autcoord(aut_node, var_prefix="X"):
+    """Pick out first true variable with name matching prefix_R_C format.
+
+    aut_node should be an instance of class tulip.automaton.AutomatonState
+
+    Return coordinate as given by extract_coord.  If more than one
+    true variable has a matching prefix, return the corresponding list
+    of coordinates.  If no matches found, return None.
+    """
+    coords = []
+    for (k, v) in aut_node.state.items():
+        if v != 1:  # We are only interested in True variables
+            continue
+        k_parts = k.split("_")
+        if len(k_parts) < 3:  # Conforms to locative naming scheme?
+            continue
+        if "_".join(k_parts[:-2]) == var_prefix:
+            coords.append(extract_coord(k))
+    if len(coords) == 0:
+        return None
+    else:
+        return coords
 
 def extract_coord(var_name):
     """Assuming prefix_R_C format, extract and return (row,column) pair.
