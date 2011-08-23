@@ -291,9 +291,10 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs, env_goal_list,
     # Create SPC file
     with open(fname_prefix+".spc", "w") as f:
         f.write("LTLSPEC\n")
-        f.write("(" + init_str+") & \n" + env_goal_str + " & \n")
+        #f.write("("+init_str+") & \n" + env_goal_str + " & \n")
+        f.write(env_goal_str)
         for obs_ind in range(num_obs):
-            f.write(env_str[obs_ind])
+            f.write(" &\n" + env_str[obs_ind])
         f.write("\n;\n\nLTLSPEC\n")
         f.write(goal_str + " & \n" + safety_str)
         f.write(" & \n" + coll_str)
