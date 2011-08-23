@@ -46,6 +46,7 @@ def read_world(world_str):
                 errmsg("Too many rows! (as of line "+str(line_counter)+")")
                 return None
             if line[0] == "-":  # Empty row?
+                row_counter += 1
                 continue
             for col_str in line.split():
                 try:
@@ -72,7 +73,11 @@ def pretty_world(W, history=None):
 
     If history is not None, it should be a pair consisting of a list
     of locations (signifying a path) and a failed-but-desired end
-    location.  These are exactly returned by the function dsim.
+    location.  These are exactly returned by the function dsim.  If
+    history contains a third element, it is regarded as a list of
+    obstacle locations.  Also, if the second element is True, then we
+    assume a failure did not occur and print the last vehicle location
+    as a "O".
 
     Return None on failure (or lame arguments).
     """
@@ -80,19 +85,28 @@ def pretty_world(W, history=None):
         return None
     # Fill in W with magic values if history is given.
     # LEGEND:
-    #   2 - regularly visited location;
-    #   3 - desired but failed location, was occupied;
-    #   4 - desired but failed location, was not occupied;
+    #   1 - "*" wall (as used in original world matrix definition);
+    #   2 - "." regularly visited location;
+    #   3 - "X" desired but failed location, was occupied;
+    #   4 - "?" desired but failed location, was not occupied;
+    #   5 - "O" last location, no failure;
+    #   6 - "!" obstacle (dynamic, adversarial)
     if history is not None:
         for loc in history[0]:
             if W[loc[0]][loc[1]] != 0 and W[loc[0]][loc[1]] != 2:
                 raise ValueError("Mismatch between given history and world at " \
                                      + "("+str(loc[0])+", "+str(loc[1])+")")
             W[loc[0]][loc[1]] = 2
-        if W[history[1][0]][history[1][1]] == 0:
-            W[history[1][0]][history[1][1]] = 4
+        if history[1] is True:
+            W[history[0][-1][0]][history[0][-1][1]] = 5
         else:
-            W[history[1][0]][history[1][1]] = 3
+            if W[history[1][0]][history[1][1]] == 0:
+                W[history[1][0]][history[1][1]] = 4
+            else:
+                W[history[1][0]][history[1][1]] = 3
+        if len(history) > 2:
+            for loc in history[2]:
+                W[loc[0]][loc[1]] = 6
     out_str = "-"*(W.shape[1]+2) + "\n"
     for i in range(W.shape[0]):
         out_str += "|"
@@ -107,6 +121,10 @@ def pretty_world(W, history=None):
                 out_str += "X"
             elif W[i][j] == 4:
                 out_str += "?"
+            elif W[i][j] == 5:
+                out_str += "O"
+            elif W[i][j] == 6:
+                out_str += "!"
             else:
                 raise ValueError("Unrecognized world W encoding.")
         out_str += "|\n"
@@ -309,10 +327,59 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs, env_goal_list,
     return tulip.automaton.Automaton(fname_prefix+".aut")
 
 
-def navobs_sim():
+def navobs_sim(init, aut, W_actual, num_obs, var_prefix="X", env_prefix="Y",
+               num_it=100):
     """Sister to dsim, but now for solutions from gen_navobs_soln.
+
+    If the world is fully known a priori, then tulip.grsim suffices
+    for generating a simulation.  navobs_sim simulates uncertainty and
+    aborts when given controller breaks.
+
+    Env locative variable prefixes are expected to take the form
+    prefix_N_R_C, where R, C are (row, column) as usual, and N is the
+    number of the obstacle.
+
+    num_obs could be determined from analysing the automaton... future work.
+
+    Same return values as in dsim, but also list of obstacle positions
+    at time of failure.
     """
-    pass
+    # Handle initialization as a special case.
+    if W_actual[init[0]][init[1]] == 1:
+        return init, None
+    
+    # Main simulation execution
+    i, j = init
+    loc_var = var_prefix+"_"+str(i)+"_"+str(j)
+    next_node = aut.findAllAutPartState({loc_var : 1})
+    if len(next_node) == 0:
+        return init, None
+    next_node = next_node[0]
+    history = [(i,j),]  # Initialize trace
+    it_counter = 0
+    while it_counter < num_it:
+        it_counter += 1
+        this_node = next_node
+        next_node = aut.findNextAutState(next_node, env_state={},
+                                         deterministic_env=False)
+        next_loc = extract_autcoord(next_node, var_prefix=var_prefix)
+        if next_loc is None:
+            raise ValueError("Given automaton is incomplete; reached deadend.")
+        if len(next_loc) > 1:
+            raise ValueError("Given automaton invalid; more than one locative prop true, despite mutual exclusion.")
+        next_loc = next_loc[0]
+        if W_actual[next_loc[0]][next_loc[1]] == 1:
+            obs_poses = []
+            for obs_ind in range(num_obs):
+                obs_poses.append(extract_autcoord(this_node,
+                                                  var_prefix=env_prefix+"_"+str(obs_ind))[0])
+            return history, next_loc, obs_poses
+        history.append(next_loc)
+    obs_poses = []
+    for obs_ind in range(num_obs):
+        obs_poses.append(extract_autcoord(next_node,
+                                          var_prefix=env_prefix+"_"+str(obs_ind))[0])
+    return history, True, obs_poses
 
 
 def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn",
@@ -385,7 +452,7 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn",
     return tulip.automaton.Automaton(fname_prefix+".aut")
 
 
-def dsim(init, aut, W_actual, var_prefix="X"):
+def dsim(init, aut, W_actual, var_prefix="X", num_it=100):
     """Simulate application of controller (automaton) on actual world.
 
     The thrust is that a solution was synthesized for a world W that
@@ -400,8 +467,14 @@ def dsim(init, aut, W_actual, var_prefix="X"):
     vehicle) of failure, and intended next location (which implies an
     action, since we are treating deterministic problem setting).
 
+    num_it is like a watchdog timer. Only num_it iterations will
+    execute before quiting (regardless of failure occurring).
+
     If initial location is not even possible, then return initial
     location and None (rather than intended action).
+
+    If quit because max number of iterations reached, history is
+    returned and True (rather than an intended location).
     """
     # Handle initialization as a special case.
     if W_actual[init[0]][init[1]] == 1:
@@ -415,7 +488,9 @@ def dsim(init, aut, W_actual, var_prefix="X"):
         return init, None
     next_node = next_node[0]
     history = [(i,j),]  # Initialize trace
-    while True:
+    it_counter = 0
+    while it_counter < num_it:
+        it_counter += 1
         next_node = aut.findNextAutState(next_node, env_state={},
                                          deterministic_env=True)
         next_loc = extract_autcoord(next_node, var_prefix=var_prefix)
@@ -427,6 +502,7 @@ def dsim(init, aut, W_actual, var_prefix="X"):
         if W_actual[next_loc[0]][next_loc[1]] == 1:
             return history, next_loc
         history.append(next_loc)
+    return history, True
 
 
 def btsim_d(init, aut, W_actual, var_prefix="X"):
