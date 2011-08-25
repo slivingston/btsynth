@@ -108,13 +108,13 @@ def read_worldf(fname):
             wstr_list.append(line)
     return read_world("\n".join(wstr_list))
 
-def pretty_world(W, goal_list=[], init_list=[], history=None):
+def pretty_world(W, goal_list=[], init_list=[], simresult=None):
     """Given world matrix W, return pretty-for-printing string.
 
-    If history is not None, it should be a pair consisting of a list
+    If simresult is not None, it should be a pair consisting of a list
     of locations (signifying a path) and a failed-but-desired end
     location.  These are exactly returned by the function dsim.  If
-    history contains a third element, it is regarded as a list of
+    simresult contains a third element, it is regarded as a list of
     obstacle locations.  Also, if the second element is True, then we
     assume a failure did not occur and print the last vehicle location
     as a "O".
@@ -127,7 +127,7 @@ def pretty_world(W, goal_list=[], init_list=[], history=None):
     if W is None:
         return None
     W = W.copy()  # Think globally, act locally.
-    # Fill in W with magic values if history is given.
+    # Fill in W with magic values if simresult is given.
     # LEGEND:
     #    1 - "*" wall (as used in original world matrix definition);
     #    2 - "." regularly visited location;
@@ -137,21 +137,21 @@ def pretty_world(W, goal_list=[], init_list=[], history=None):
     #    6 - "!" obstacle (dynamic, adversarial);
     #   10 - "G" goal location;
     #   11 - "I" possible initial location.
-    if history is not None:
-        for loc in history[0]:
+    if simresult is not None:
+        for loc in simresult[0]:
             if W[loc[0]][loc[1]] != 0 and W[loc[0]][loc[1]] != 2:
-                raise ValueError("Mismatch between given history and world at " \
+                raise ValueError("Mismatch between given simresult and world at " \
                                      + "("+str(loc[0])+", "+str(loc[1])+")")
             W[loc[0]][loc[1]] = 2
-        if history[1] is True:
-            W[history[0][-1][0]][history[0][-1][1]] = 5
+        if simresult[1] is True:
+            W[simresult[0][-1][0]][simresult[0][-1][1]] = 5
         else:
-            if W[history[1][0]][history[1][1]] == 0:
-                W[history[1][0]][history[1][1]] = 4
+            if W[simresult[1][0]][simresult[1][1]] == 0:
+                W[simresult[1][0]][simresult[1][1]] = 4
             else:
-                W[history[1][0]][history[1][1]] = 3
-        if len(history) > 2:
-            for loc in history[2]:
+                W[simresult[1][0]][simresult[1][1]] = 3
+        if len(simresult) > 2:
+            for loc in simresult[2]:
                 W[loc[0]][loc[1]] = 6
     out_str = "-"*(W.shape[1]+2) + "\n"
     if (goal_list is not None) and len(goal_list) > 0:
@@ -453,7 +453,7 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn",
     per goal.
     
     Return instance of tulip.automaton.Automaton on success;
-    None if error.
+    None if not realizable, or an error occurs.
     """
     if len(init_list) == 0:
         return None
@@ -501,11 +501,14 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn",
         f.write("\n;")
     
     # Try JTLV synthesis
-    tulip.grgameint.solveGame(smv_file=fname_prefix+".smv",
-                              spc_file=fname_prefix+".spc",
-                              init_option=1, file_exist_option="r")
+    realizable = tulip.grgameint.solveGame(smv_file=fname_prefix+".smv",
+                                           spc_file=fname_prefix+".spc",
+                                           init_option=1, file_exist_option="r")
 
-    return tulip.automaton.Automaton(fname_prefix+".aut")
+    if not realizable:
+        return None
+    else:
+        return tulip.automaton.Automaton(fname_prefix+".aut")
 
 
 def dsim(init, aut, W_actual, var_prefix="X", num_it=100):
@@ -553,6 +556,8 @@ def dsim(init, aut, W_actual, var_prefix="X", num_it=100):
         it_counter += 1
         next_node = aut.findNextAutState(next_node, env_state={},
                                          deterministic_env=True)
+        if next_node == -1:
+            raise ValueError("Reached deadend in Automaton; cannot find next node.")
         next_loc = extract_autcoord(next_node, var_prefix=var_prefix)
         if next_loc is None:
             raise ValueError("Given automaton is incomplete; reached deadend.")
@@ -606,59 +611,64 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="X"):
         # Patch (terminology follows that of the paper)
         gamma = 1  # radius
         delta = 1  # increment
-        nbhd_inclusion = []  # Use Manhattan distance as metric
-        # for i in range(history[-1][0]-gamma, history[-1][0]+gamma+1):
-        #     for j in range(history[-1][1]-gamma, history[-1][1]+gamma+1):
-        for i in range(intent[0]-gamma, intent[0]+gamma+1):
-            for j in range(intent[1]-gamma, intent[1]+gamma+1):
-                if i >= 0 and i < W_actual.shape[0] \
-                        and j >= 0 and j < W_actual.shape[1]:
-                    nbhd_inclusion.append((i, j))
-        if len(nbhd_inclusion) == 0:
-            raise ValueError("gamma radius is too small; neighborhood is empty.")
-        patch_goal_list = []
-        for v in nbhd_inclusion:
-            if v in goal_list:
-                patch_goal_list.append(v)
-        fail_loc_var = var_prefix+"_"+str(intent[0])+"_"+str(intent[1])
-        S_block = aut.findAllAutPartState({fail_loc_var : 1})
-        S_Pre = []
-        for node in aut.states:
-            for bad_node in S_block:
-                if bad_node.id in node.transition:
-                    for bad_node_redund in S_block:
-                        # To ensure S_Pre has empty intersection with S_block
-                        if node.id == bad_node_redund.id:
-                            break
-                    S_Pre.append(node)
-                    break
-        S_Post = {}
-        # Dictionary with keys of IDs of nodes in S_Pre, and values in
-        # S\S_block (AutomatonState instances), thus
-        # expressing a reachability relationship (or ``branchout set''
-        # in the terminology of the paper).
-        for node in S_Pre:
-            S_Post[node.id] = []
-            for bad_node in S_block:
-                if bad_node.id in node.transition:
-                    for post_node_id in bad_node.transition:
-                        post_node = aut.getAutState(post_node_id)
-                        if post_node == -1:
-                            raise ValueError("inconsistent edge labelling in automaton.")
-                        if post_node in S_block:
-                            continue  # Do not include outgoing edges going back to S_block.
-                        S_Post[node.id].append(post_node)
-        for exit_node in S_Post.values():
-            # This deviates from the algorithm! (a convenience hack; may fail)
-            patch_goal_list.append(extract_autcoord(exit_node[0],
-                                                    var_prefix=var_prefix)[0])
-        W_patch, offset = subworld(W_actual, nbhd_inclusion)
-        # Shift coordinates to be w.r.t. W_patch
-        for ind in range(len(patch_goal_list)):
-            patch_goal_list[ind] = (patch_goal_list[ind][0]-offset[0],
-                                    patch_goal_list[ind][1]-offset[1])
-        init_loc = (history[-1][0]-offset[0], history[-1][1]-offset[1])
-        aut_patch = gen_dsoln([init_loc], patch_goal_list, W_patch)
+        iteration_count = 0
+        while True:
+            iteration_count += 1
+            radius = gamma + (iteration_count-1)*delta
+            nbhd_inclusion = []  # Use Manhattan distance as metric
+            for i in range(intent[0]-radius, intent[0]+radius+1):
+                for j in range(intent[1]-radius, intent[1]+radius+1):
+                    if i >= 0 and i < W_actual.shape[0] \
+                            and j >= 0 and j < W_actual.shape[1]:
+                        nbhd_inclusion.append((i, j))
+            if len(nbhd_inclusion) == 0:
+                raise ValueError("gamma radius is too small; neighborhood is empty.")
+            patch_goal_list = []
+            for v in nbhd_inclusion:
+                if v in goal_list:
+                    patch_goal_list.append(v)
+            fail_loc_var = var_prefix+"_"+str(intent[0])+"_"+str(intent[1])
+            S_block = aut.findAllAutPartState({fail_loc_var : 1})
+            S_Pre = []
+            for node in aut.states:
+                for bad_node in S_block:
+                    if bad_node.id in node.transition:
+                        for bad_node_redund in S_block:
+                            # To ensure S_Pre has empty intersection with S_block
+                            if node.id == bad_node_redund.id:
+                                break
+                        S_Pre.append(node)
+                        break
+            S_Post = {}
+            # Dictionary with keys of IDs of nodes in S_Pre, and values in
+            # S\S_block (AutomatonState instances), thus
+            # expressing a reachability relationship (or ``branchout set''
+            # in the terminology of the paper).
+            for node in S_Pre:
+                S_Post[node.id] = []
+                for bad_node in S_block:
+                    if bad_node.id in node.transition:
+                        for post_node_id in bad_node.transition:
+                            post_node = aut.getAutState(post_node_id)
+                            if post_node == -1:
+                                raise ValueError("inconsistent edge labelling in automaton.")
+                            if post_node in S_block:
+                                continue  # Do not include outgoing edges going back to S_block.
+                            S_Post[node.id].append(post_node)
+            for exit_node in S_Post.values():
+                # This deviates from the algorithm! (a convenience hack; may fail)
+                patch_goal_list.append(extract_autcoord(exit_node[0],
+                                                        var_prefix=var_prefix)[0])
+            W_patch, offset = subworld(W_actual, nbhd_inclusion)
+            # Shift coordinates to be w.r.t. W_patch
+            for ind in range(len(patch_goal_list)):
+                patch_goal_list[ind] = (patch_goal_list[ind][0]-offset[0],
+                                        patch_goal_list[ind][1]-offset[1])
+            init_loc = (history[-1][0]-offset[0], history[-1][1]-offset[1])
+            aut_patch = gen_dsoln([init_loc], patch_goal_list, W_patch)
+            if aut_patch is not None:
+                break  # Success! (i.e., patch problem is realizable)
+
         # Merge (in several steps)
 
         # Trim bad nodes from aut; note that we just delete ingoing

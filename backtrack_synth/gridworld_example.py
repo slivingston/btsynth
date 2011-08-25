@@ -49,6 +49,11 @@ if __name__ == "__main__":
     # print pretty_world(W_actual, simresult)
     
     print "sim and patch..."
-    aut_patched = btsim_d(init_list[0], goal_list, aut, W_actual, num_steps=100)
+    (aut_patched, W_patched) = btsim_d(init_list[0], goal_list, aut, W_actual, num_steps=100)
     
-    aut_patched[0].writeDotFile(fname="tempsyn-PATCHED.dot", hideZeros=True)
+    aut_patched.writeDotFile(fname="tempsyn-PATCHED.dot", hideZeros=True)
+
+    history, intent = dsim(init_list[0], aut_patched, W_actual, num_it=100)
+    print intent
+    print pretty_world(W_actual, goal_list=goal_list, init_list=init_list,
+                       simresult=[history, intent])
