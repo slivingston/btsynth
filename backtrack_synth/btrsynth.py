@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-SCL; 2011 Aug 22, draft
+SCL; 2011 Aug, draft
 """
 
 import numpy as np
@@ -12,17 +12,23 @@ def errmsg(m):
     print "ERROR: "+m
 
 def read_world(world_str):
-    """Process given string as a World description, return binary matrix.
+    """Process string as World, return matrix, and goal, init lists.
 
     The returned uint8 NumPy matrix (nd-array) has 0 or 1 value
     entries, with 0 being unoccupied, 1 occupied.  On error, return
-    None.
+    None.  Goal and init lists are built from the file and also
+    returned. If no goals (resp. initial locations) found, then empty
+    list is returned.
+
+    Summarizing, the return tuple looks like (W, goal_list, init_list).
 
     Assume lines are separated by '\n'; note that read_worldf ensures
     this before invoking read_world.
     """
     first_line_found = False
     line_counter = 0
+    goal_list = []
+    init_list = []
     world = np.array([], dtype=np.uint8)  # In case given string is lame.
     for line in world_str.split("\n"):
         line_counter += 1
@@ -38,13 +44,47 @@ def read_world(world_str):
                 num_cols = int(entries[1])
             except ValueError:
                 errmsg("Malformed size spec at line "+str(line_counter))
-                return None
+                return None, None, None
             world = np.zeros(shape=(num_rows, num_cols), dtype=np.uint8)
             row_counter = 0
         else:
-            if row_counter >= num_rows:
+            if row_counter > num_rows:
                 errmsg("Too many rows! (as of line "+str(line_counter)+")")
-                return None
+                return None, None, None
+            if ("G" in line) or ("g" in line):  # Goal line?
+                val_strlist = line.split()
+                if len(val_strlist) != 3:
+                    errmsg("Malformed goal spec at line "+str(line_counter))
+                    return None, None, None
+                try:
+                    g_row = int(val_strlist[1])
+                    if (g_row < 0) or (g_row >= num_rows):
+                        raise ValueError
+                    g_col = int(val_strlist[2])
+                    if (g_col < 0) or (g_col >= num_cols):
+                        raise ValueError
+                except ValueError:
+                    errmsg("Malformed goal spec at line "+str(line_counter))
+                    return None, None, None
+                goal_list.append((g_row, g_col))
+                continue
+            if ("I" in line) or ("i" in line):  # Initialization line?
+                val_strlist = line.split()
+                if len(val_strlist) != 3:
+                    errmsg("Malformed init spec at line "+str(line_counter))
+                    return None, None, None
+                try:
+                    i_row = int(val_strlist[1])
+                    if (i_row < 0) or (i_row >= num_rows):
+                        raise ValueError
+                    i_col = int(val_strlist[2])
+                    if (i_col < 0) or (i_col >= num_cols):
+                        raise ValueError
+                except ValueError:
+                    errmsg("Malformed init spec at line "+str(line_counter))
+                    return None, None, None
+                init_list.append((i_row, i_col))
+                continue
             if line[0] == "-":  # Empty row?
                 row_counter += 1
                 continue
@@ -55,10 +95,10 @@ def read_world(world_str):
                         raise ValueError
                 except ValueError:
                     errmsg("Malformed row spec at line "+str(line_counter))
-                    return None
+                    return None, None, None
                 world[row_counter][col] = 1
             row_counter += 1
-    return world
+    return world, goal_list, init_list
 
 def read_worldf(fname):
     """File wrapper for read_world function."""
@@ -68,7 +108,7 @@ def read_worldf(fname):
             wstr_list.append(line)
     return read_world("\n".join(wstr_list))
 
-def pretty_world(W, history=None):
+def pretty_world(W, goal_list=[], init_list=[], history=None):
     """Given world matrix W, return pretty-for-printing string.
 
     If history is not None, it should be a pair consisting of a list
@@ -79,18 +119,24 @@ def pretty_world(W, history=None):
     assume a failure did not occur and print the last vehicle location
     as a "O".
 
+    If goal_list or init_list are nonempty, "G" and "I" symbols are
+    inserted into the pretty map as appropriate.
+
     Return None on failure (or lame arguments).
     """
     if W is None:
         return None
+    W = W.copy()  # Think globally, act locally.
     # Fill in W with magic values if history is given.
     # LEGEND:
-    #   1 - "*" wall (as used in original world matrix definition);
-    #   2 - "." regularly visited location;
-    #   3 - "X" desired but failed location, was occupied;
-    #   4 - "?" desired but failed location, was not occupied;
-    #   5 - "O" last location, no failure;
-    #   6 - "!" obstacle (dynamic, adversarial)
+    #    1 - "*" wall (as used in original world matrix definition);
+    #    2 - "." regularly visited location;
+    #    3 - "X" desired but failed location, was occupied;
+    #    4 - "?" desired but failed location, was not occupied;
+    #    5 - "O" last location, no failure;
+    #    6 - "!" obstacle (dynamic, adversarial);
+    #   10 - "G" goal location;
+    #   11 - "I" possible initial location.
     if history is not None:
         for loc in history[0]:
             if W[loc[0]][loc[1]] != 0 and W[loc[0]][loc[1]] != 2:
@@ -108,6 +154,12 @@ def pretty_world(W, history=None):
             for loc in history[2]:
                 W[loc[0]][loc[1]] = 6
     out_str = "-"*(W.shape[1]+2) + "\n"
+    if (goal_list is not None) and len(goal_list) > 0:
+        for loc in goal_list:
+            W[loc[0]][loc[1]] = 10
+    if (init_list is not None) and len(init_list) > 0:
+        for loc in init_list:
+            W[loc[0]][loc[1]] = 11
     for i in range(W.shape[0]):
         out_str += "|"
         for j in range(W.shape[1]):
@@ -125,6 +177,10 @@ def pretty_world(W, history=None):
                 out_str += "O"
             elif W[i][j] == 6:
                 out_str += "!"
+            elif W[i][j] == 10:
+                out_str += "G"
+            elif W[i][j] == 11:
+                out_str += "I"
             else:
                 raise ValueError("Unrecognized world W encoding.")
         out_str += "|\n"
@@ -763,3 +819,4 @@ def extract_coord(var_name):
 def extract_coord_test():
     assert(extract_coord("test_3_0") == (3, 0))
     assert(extract_coord("test3_0") is None)
+
