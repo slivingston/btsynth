@@ -12,15 +12,17 @@ def errmsg(m):
     print "ERROR: "+m
 
 def read_world(world_str):
-    """Process string as World, return matrix, and goal, init lists.
+    """Process string as World, return matrix, and goal, init lists for sys and env.
 
     The returned uint8 NumPy matrix (nd-array) has 0 or 1 value
     entries, with 0 being unoccupied, 1 occupied.  On error, return
     None.  Goal and init lists are built from the file and also
     returned. If no goals (resp. initial locations) found, then empty
-    list is returned.
+    lists are returned.
 
-    Summarizing, the return tuple looks like (W, goal_list, init_list).
+    Summarizing, the return tuple looks like (W, goal_list, init_list, env_goal_list, env_init_list).
+
+    NOTE: ENV GOAL LISTS ARE NOT YET IMPLEMENTED IN WORLD FILES!
 
     Assume lines are separated by '\n'; note that read_worldf ensures
     this before invoking read_world.
@@ -29,6 +31,9 @@ def read_world(world_str):
     line_counter = 0
     goal_list = []
     init_list = []
+    env_goal_list = []
+    env_init_list = []
+    empty_return = None, None, None, None, None
     world = np.array([], dtype=np.uint8)  # In case given string is lame.
     for line in world_str.split("\n"):
         line_counter += 1
@@ -44,18 +49,18 @@ def read_world(world_str):
                 num_cols = int(entries[1])
             except ValueError:
                 errmsg("Malformed size spec at line "+str(line_counter))
-                return None, None, None
+                return empty_return
             world = np.zeros(shape=(num_rows, num_cols), dtype=np.uint8)
             row_counter = 0
         else:
             if row_counter > num_rows:
                 errmsg("Too many rows! (as of line "+str(line_counter)+")")
-                return None, None, None
-            if ("G" in line) or ("g" in line):  # Goal line?
+                return empty_return
+            if ("G" in line) or ("g" in line):  # Sys Goal line?
                 val_strlist = line.split()
                 if len(val_strlist) != 3:
                     errmsg("Malformed goal spec at line "+str(line_counter))
-                    return None, None, None
+                    return empty_return
                 try:
                     g_row = int(val_strlist[1])
                     if (g_row < 0) or (g_row >= num_rows):
@@ -65,14 +70,14 @@ def read_world(world_str):
                         raise ValueError
                 except ValueError:
                     errmsg("Malformed goal spec at line "+str(line_counter))
-                    return None, None, None
+                    return empty_return
                 goal_list.append((g_row, g_col))
                 continue
-            if ("I" in line) or ("i" in line):  # Initialization line?
+            if ("I" in line) or ("i" in line):  # Sys Initialization line?
                 val_strlist = line.split()
                 if len(val_strlist) != 3:
                     errmsg("Malformed init spec at line "+str(line_counter))
-                    return None, None, None
+                    return empty_return
                 try:
                     i_row = int(val_strlist[1])
                     if (i_row < 0) or (i_row >= num_rows):
@@ -82,8 +87,25 @@ def read_world(world_str):
                         raise ValueError
                 except ValueError:
                     errmsg("Malformed init spec at line "+str(line_counter))
-                    return None, None, None
+                    return empty_return
                 init_list.append((i_row, i_col))
+                continue
+            if ("E" in line) or ("e" in line):  # Env Initialization line?
+                val_strlist = line.split()
+                if len(val_strlist) != 3:
+                    errmsg("Malformed env init spec at line "+str(line_counter))
+                    return empty_return
+                try:
+                    i_row = int(val_strlist[1])
+                    if (i_row < 0) or (i_row >= num_rows):
+                        raise ValueError
+                    i_col = int(val_strlist[2])
+                    if (i_col < 0) or (i_col >= num_cols):
+                        raise ValueError
+                except ValueError:
+                    errmsg("Malformed env init spec at line "+str(line_counter))
+                    return empty_return
+                env_init_list.append((i_row, i_col))
                 continue
             if line[0] == "-":  # Empty row?
                 row_counter += 1
@@ -95,10 +117,10 @@ def read_world(world_str):
                         raise ValueError
                 except ValueError:
                     errmsg("Malformed row spec at line "+str(line_counter))
-                    return None, None, None
+                    return empty_return
                 world[row_counter][col] = 1
             row_counter += 1
-    return world, goal_list, init_list
+    return world, goal_list, init_list, env_goal_list, env_init_list
 
 def read_worldf(fname):
     """File wrapper for read_world function."""
@@ -108,7 +130,8 @@ def read_worldf(fname):
             wstr_list.append(line)
     return read_world("\n".join(wstr_list))
 
-def pretty_world(W, goal_list=[], init_list=[], simresult=None):
+def pretty_world(W, goal_list=[], init_list=[], env_init_list=[],
+                 simresult=None):
     """Given world matrix W, return pretty-for-printing string.
 
     If simresult is not None, it should be a pair consisting of a list
@@ -121,6 +144,8 @@ def pretty_world(W, goal_list=[], init_list=[], simresult=None):
 
     If goal_list or init_list are nonempty, "G" and "I" symbols are
     inserted into the pretty map as appropriate.
+
+    If env_init_list is nonempty, "E" is inserted where appropriate.
 
     Return None on failure (or lame arguments).
     """
@@ -137,6 +162,7 @@ def pretty_world(W, goal_list=[], init_list=[], simresult=None):
     #    6 - "!" obstacle (dynamic, adversarial);
     #   10 - "G" goal location;
     #   11 - "I" possible initial location.
+    #   12 - "E" possible initial location.
     if simresult is not None:
         for loc in simresult[0]:
             if W[loc[0]][loc[1]] != 0 and W[loc[0]][loc[1]] != 2:
@@ -160,6 +186,9 @@ def pretty_world(W, goal_list=[], init_list=[], simresult=None):
     if (init_list is not None) and len(init_list) > 0:
         for loc in init_list:
             W[loc[0]][loc[1]] = 11
+    if (env_init_list is not None) and len(env_init_list) > 0:
+        for loc in env_init_list:
+            W[loc[0]][loc[1]] = 12
     for i in range(W.shape[0]):
         out_str += "|"
         for j in range(W.shape[1]):
@@ -181,6 +210,8 @@ def pretty_world(W, goal_list=[], init_list=[], simresult=None):
                 out_str += "G"
             elif W[i][j] == 11:
                 out_str += "I"
+            elif W[i][j] == 12:
+                out_str += "E"
             else:
                 raise ValueError("Unrecognized world W encoding.")
         out_str += "|\n"
@@ -250,9 +281,11 @@ def LTL_world(W, var_prefix="obs"):
     return out_str
 
 
-def gen_navobs_soln(init_list, goal_list, W, num_obs, env_goal_list,
-                    var_prefix="X", fname_prefix="tempsyn", env_prefix="Y",
-                    disjunction_goals=False, env_disjunction_goals=False):
+def gen_navobs_soln(init_list, goal_list, W, num_obs,
+                    env_init_list, env_goal_list,
+                    var_prefix="X", env_prefix="Y",
+                    disjunction_goals=False, env_disjunction_goals=False,
+                    fname_prefix="tempsyn"):
     """Generate solution as in gen_dsoln but now with dynamic obstacles.
 
     This is a limited extension to the problem considered in
@@ -261,15 +294,21 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs, env_goal_list,
     controller to safely avoid them while visiting the goal locations
     infinitely often.
 
+    env_init_list specifies valid initial states for environment.  If
+    omitted, env can start anywhere consistent with safety and
+    progress properties (in assumption).
+
     env_goal_list is a list of locations that must be visited by the
     environment obstacles infinitely often.  This reduces the
     likelihood that a permissible env strategy is to corner the
     vehicle forever.  If env_goal_list has length greater than one,
     these locations can be combined in a conjunctive or disjunctive
-    form, by setting env_disjunction_goals.  See comments in gen_dsoln.
+    form, by setting env_disjunction_goals.  See comments in
+    gen_dsoln.  Nonetheless, env_goal_list may be empty or None, in
+    which case no such restriction is placed on the environment.
 
     Return instance of tulip.automaton.Automaton on success;
-    None if error.
+    None if not realizable, or an error occurs.
     """
     # Argument error checking
     if (len(init_list) == 0) or (num_obs < 0):
@@ -278,30 +317,40 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs, env_goal_list,
     # Handle degenerate case of no obstacles (thus, deterministic problem).
     if num_obs < 1:
         return gen_dsoln(init_list=init_list, goal_list=goal_list, W=W,
-                         var_prefix=var_prefix, fname_prefix=fname_prefix,
-                         disjunction_goals=disjunction_goals)
+                         var_prefix=var_prefix,
+                         disjunction_goals=disjunction_goals,
+                         fname_prefix=fname_prefix)
 
     ########################################
     # Environment prep
     env_str = [LTL_world(W, var_prefix="e."+env_prefix+"_"+str(k)) \
                    for k in range(num_obs)]
 
+    env_init_str = ""
+    if (env_init_list is not None) and len(env_init_list) > 0:
+        for loc in env_init_list:
+            for obs_ind in range(num_obs):
+                if len(env_init_str) > 0:
+                    env_init_str += " | "
+                env_init_str += "(" + "e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+
     env_goal_str = ""
-    if not env_disjunction_goals:
-        for obs_ind in range(num_obs):
-            for loc in env_goal_list:
+    if (env_goal_list is not None) and len(env_goal_list) > 0:
+        if not env_disjunction_goals:
+            for obs_ind in range(num_obs):
+                for loc in env_goal_list:
+                    if len(env_goal_str) > 0:
+                        env_goal_str += " & "
+                    env_goal_str += "[]<>(" + "e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+        else:
+            for obs_ind in range(num_obs):
                 if len(env_goal_str) > 0:
                     env_goal_str += " & "
-                env_goal_str += "[]<>(" + "e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
-    else:
-        for obs_ind in range(num_obs):
-            if len(env_goal_str) > 0:
-                env_goal_str += " & "
-            for loc in env_goal_list:
-                if len(env_goal_str) == 0:
-                    env_goal_str += "[]<>( e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1])
-                env_goal_str += " | e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1])
-            env_goal_str += " )"
+                for loc in env_goal_list:
+                    if len(env_goal_str) == 0:
+                        env_goal_str += "[]<>( e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1])
+                    env_goal_str += " | e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1])
+                env_goal_str += " )"
     
     ########################################
     # Sys prep
@@ -365,22 +414,32 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs, env_goal_list,
     # Create SPC file
     with open(fname_prefix+".spc", "w") as f:
         f.write("LTLSPEC\n")
-        #f.write("("+init_str+") & \n" + env_goal_str + " & \n")
-        f.write(env_goal_str)
+        if len(env_init_str) > 0:
+            f.write("("+env_init_str+") & \n")
+        if len(env_goal_str) > 0:
+            f.write(env_goal_str + " & \n")
+        first_obs_flag = True
         for obs_ind in range(num_obs):
-            f.write(" &\n" + env_str[obs_ind])
+            if first_obs_flag:
+                f.write(env_str[obs_ind])
+                first_obs_flag = False
+            else:
+                f.write(" &\n" + env_str[obs_ind])
         f.write("\n;\n\nLTLSPEC\n")
-        f.write(goal_str + " & \n" + safety_str)
+        f.write("("+init_str+") & \n" + goal_str + " & \n" + safety_str)
         f.write(" & \n" + coll_str)
         f.write("\n;")
     
     # Try JTLV synthesis
-    tulip.grgameint.solveGame(smv_file=fname_prefix+".smv",
-                              spc_file=fname_prefix+".spc",
-                              init_option=1, file_exist_option="r",
-                              heap_size="-Xmx2048m")
+    realizable = tulip.grgameint.solveGame(smv_file=fname_prefix+".smv",
+                                           spc_file=fname_prefix+".spc",
+                                           init_option=1, file_exist_option="r",
+                                           heap_size="-Xmx2048m")
 
-    return tulip.automaton.Automaton(fname_prefix+".aut")
+    if not realizable:
+        return None
+    else:
+        return tulip.automaton.Automaton(fname_prefix+".aut")
 
 
 def navobs_sim(init, aut, W_actual, num_obs, var_prefix="X", env_prefix="Y",
@@ -438,8 +497,9 @@ def navobs_sim(init, aut, W_actual, num_obs, var_prefix="X", env_prefix="Y",
     return history, True, obs_poses
 
 
-def gen_dsoln(init_list, goal_list, W, var_prefix="X", fname_prefix="tempsyn",
-              disjunction_goals=False):
+def gen_dsoln(init_list, goal_list, W, var_prefix="X",
+              disjunction_goals=False,
+              fname_prefix="tempsyn"):
     """Generate deterministic solution, given initial and goal states.
 
     init_list is a list of pairs (row, col), signifying locations in
@@ -591,6 +651,9 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="X"):
     time of completion.  Note that the ``known world'' may not match
     the given W_actual, because some parts of the world may never be
     visited (hence, uncertainty not corrected).
+
+    If patching is impossible or seems as hard as the original
+    (overall) problem, then return (None, None).
     """
     step_count = 0
     while True:
@@ -607,6 +670,10 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="X"):
         if intent is True:
             return aut, None
         step_count += len(history)
+
+        # Detect special case
+        if intent in goal_list:
+            return None, None
 
         # Patch (terminology follows that of the paper)
         gamma = 1  # radius
@@ -710,16 +777,6 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="X"):
                 if extract_autcoord(S_Pre[ind], var_prefix=var_prefix)[0] == extract_autcoord(aut_patch.states[new_ind], var_prefix=var_prefix)[0]:
                     # Should be breadth-first search to find out-paths into S_Post[S_Pre[ind].id]
                     S_Pre[ind].transition = aut_patch.states[new_ind].transition[:]
-                    # for node_ind in range(len(aut.states)):
-                    #     if node_ind < max_id+1:
-                    #         continue
-                    #         # for trans_ind in range(len(aut.states[node_ind].transition)):
-                    #         #     if aut.states[node_ind].transition[trans_ind] == aut_patch.states[new_ind].id:
-                    #         #         aut.states[node_ind].transition[trans_ind] = S_Pre[ind].id
-                    #     else:
-                    #         for trans_ind in range(len(aut.states[node_ind].transition)):
-                    #             if aut.states[node_ind].transition[trans_ind] == aut_patch.states[new_ind].id:
-                    #                 del aut.states[node_ind].transition[trans_ind]
                     break
 
         for patch_goal in patch_goal_list:
@@ -730,8 +787,156 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="X"):
                     for post_ind in range(len(S_Post[pre_node.id])):
                         if extract_autcoord(S_Post[pre_node.id][post_ind], var_prefix=var_prefix)[0] == patch_goal:
                             for node_ind in range(len(aut.states)):
-                                # if node_ind < max_id+1:
-                                #     continue
+                                for trans_ind in range(len(aut.states[node_ind].transition)):
+                                    if aut.states[node_ind].transition[trans_ind] == aut_patch.states[new_ind].id:
+                                        aut.states[node_ind].transition[trans_ind] = S_Post[pre_node.id][post_ind].id
+                            break
+
+
+def btsim_navobs(init, goal_list, aut, W_actual, num_obs, env_goal_list,
+                 num_steps=100,
+                 var_prefix="X", env_prefix="Y"):
+    """Sister to btsim_d, but now for solutions from gen_navobs_soln.
+
+    Cf. doc for navobs_sim and gen_navobs_soln.
+    """
+    step_count = 0
+    while True:
+        if step_count == num_steps:
+            return aut, None
+
+        # Loop invariants
+        if num_steps-step_count < 0:
+            raise ValueError("overstepped btsim_navobs loop.")
+        
+        # Sim
+        history, intent, obs_poses = navobs_sim(init, aut, W_actual,
+                                                num_obs=num_obs,
+                                                var_prefix=var_prefix,
+                                                env_prefix=env_prefix,
+                                                num_it=num_steps-step_count)
+        if intent is True:
+            return aut, None
+        step_count += len(history)
+
+        # Detect special case
+        if intent in goal_list:
+            return None, None
+
+        # Patch (terminology follows that of the paper)
+        gamma = 1  # radius
+        delta = 1  # increment
+        iteration_count = 0
+        while True:
+            iteration_count += 1
+            radius = gamma + (iteration_count-1)*delta
+            nbhd_inclusion = []  # Use Manhattan distance as metric
+            for i in range(intent[0]-radius, intent[0]+radius+1):
+                for j in range(intent[1]-radius, intent[1]+radius+1):
+                    if i >= 0 and i < W_actual.shape[0] \
+                            and j >= 0 and j < W_actual.shape[1]:
+                        nbhd_inclusion.append((i, j))
+            if len(nbhd_inclusion) == 0:
+                raise ValueError("gamma radius is too small; neighborhood is empty.")
+            patch_goal_list = []
+            for v in nbhd_inclusion:
+                if v in goal_list:
+                    patch_goal_list.append(v)
+            fail_loc_var = var_prefix+"_"+str(intent[0])+"_"+str(intent[1])
+            S_block = aut.findAllAutPartState({fail_loc_var : 1})
+            S_Pre = []
+            for node in aut.states:
+                for bad_node in S_block:
+                    if bad_node.id in node.transition:
+                        for bad_node_redund in S_block:
+                            # To ensure S_Pre has empty intersection with S_block
+                            if node.id == bad_node_redund.id:
+                                break
+                        S_Pre.append(node)
+                        break
+            S_Post = {}
+            # Dictionary with keys of IDs of nodes in S_Pre, and values in
+            # S\S_block (AutomatonState instances), thus
+            # expressing a reachability relationship (or ``branchout set''
+            # in the terminology of the paper).
+            for node in S_Pre:
+                S_Post[node.id] = []
+                for bad_node in S_block:
+                    if bad_node.id in node.transition:
+                        for post_node_id in bad_node.transition:
+                            post_node = aut.getAutState(post_node_id)
+                            if post_node == -1:
+                                raise ValueError("inconsistent edge labelling in automaton.")
+                            if post_node in S_block:
+                                continue  # Do not include outgoing edges going back to S_block.
+                            S_Post[node.id].append(post_node)
+            for exit_node in S_Post.values():
+                # This deviates from the algorithm! (a convenience hack; may fail)
+                patch_goal_list.append(extract_autcoord(exit_node[0],
+                                                        var_prefix=var_prefix)[0])
+            W_patch, offset = subworld(W_actual, nbhd_inclusion)
+            # Shift coordinates to be w.r.t. W_patch
+            for ind in range(len(patch_goal_list)):
+                patch_goal_list[ind] = (patch_goal_list[ind][0]-offset[0],
+                                        patch_goal_list[ind][1]-offset[1])
+            init_loc = (history[-1][0]-offset[0], history[-1][1]-offset[1])
+            aut_patch = gen_navobs_soln([init_loc], patch_goal_list, W_patch,
+                                        env_goal_list=None,
+                                        var_prefix=var_prefix, env_prefix=env_prefix)
+            if aut_patch is not None:
+                break  # Success! (i.e., patch problem is realizable)
+
+        # Merge (in several steps)
+
+        # Trim bad nodes from aut; note that we just delete ingoing
+        # and outgoing edges from all nodes in S_block.  The result is
+        # a set of ``floater'' nodes.
+        for ind in range(len(S_Pre)):
+            for bad_ind in range(len(S_block)):
+                try:
+                    S_Pre[ind].transition.remove(S_block[bad_ind].id)
+                except ValueError:
+                    pass
+                S_block[bad_ind].transition = []
+
+        # Import all nodes from M_patch into M. Keep track of the
+        # assigned IDs.
+        max_id = -1
+        for node in aut.states:
+            if node.id > max_id:
+                max_id = node.id
+        # Offset all IDs in M_patch by max_id+1
+        for node in aut_patch.states:
+            node.transition = [max_id+1+k for k in node.transition]
+            node.id += max_id+1
+            (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
+            node.state[var_prefix+"_"+str(i)+"_"+str(j)] = 0
+            node.state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
+            aut.addAutState(node)
+
+        # Add offset back in
+        for ind in range(len(patch_goal_list)):
+            patch_goal_list[ind] = (patch_goal_list[ind][0]+offset[0],
+                                    patch_goal_list[ind][1]+offset[1])
+        init_loc = (history[-1][0]+offset[0], history[-1][1]+offset[1])
+
+        # Patch-in edges
+
+        for ind in range(len(S_Pre)):
+            for new_ind in range(len(aut_patch.states)):
+                if extract_autcoord(S_Pre[ind], var_prefix=var_prefix)[0] == extract_autcoord(aut_patch.states[new_ind], var_prefix=var_prefix)[0]:
+                    # Should be breadth-first search to find out-paths into S_Post[S_Pre[ind].id]
+                    S_Pre[ind].transition = aut_patch.states[new_ind].transition[:]
+                    break
+
+        for patch_goal in patch_goal_list:
+            for new_ind in range(len(aut_patch.states)):
+                if extract_autcoord(aut_patch.states[new_ind], var_prefix=var_prefix)[0] != patch_goal:
+                    continue
+                for pre_node in S_Pre:
+                    for post_ind in range(len(S_Post[pre_node.id])):
+                        if extract_autcoord(S_Post[pre_node.id][post_ind], var_prefix=var_prefix)[0] == patch_goal:
+                            for node_ind in range(len(aut.states)):
                                 for trans_ind in range(len(aut.states[node_ind].transition)):
                                     if aut.states[node_ind].transition[trans_ind] == aut_patch.states[new_ind].id:
                                         aut.states[node_ind].transition[trans_ind] = S_Post[pre_node.id][post_ind].id
