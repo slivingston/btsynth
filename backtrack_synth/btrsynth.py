@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-SCL; 2011 Aug, draft
+SCL; 2011 Aug, Sep, draft
 """
 
 import numpy as np
@@ -283,7 +283,7 @@ def LTL_world(W, var_prefix="obs"):
 
 def gen_navobs_soln(init_list, goal_list, W, num_obs,
                     env_init_list, env_goal_list,
-                    var_prefix="X", env_prefix="Y",
+                    var_prefix="Y", env_prefix="X",
                     disjunction_goals=False, env_disjunction_goals=False,
                     fname_prefix="tempsyn"):
     """Generate solution as in gen_dsoln but now with dynamic obstacles.
@@ -442,7 +442,7 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
         return tulip.automaton.Automaton(fname_prefix+".aut")
 
 
-def navobs_sim(init, aut, W_actual, num_obs, var_prefix="X", env_prefix="Y",
+def navobs_sim(init, aut, W_actual, num_obs, var_prefix="Y", env_prefix="X",
                num_it=100):
     """Sister to dsim, but now for solutions from gen_navobs_soln.
 
@@ -497,7 +497,7 @@ def navobs_sim(init, aut, W_actual, num_obs, var_prefix="X", env_prefix="Y",
     return history, True, obs_poses
 
 
-def gen_dsoln(init_list, goal_list, W, var_prefix="X",
+def gen_dsoln(init_list, goal_list, W, var_prefix="Y",
               disjunction_goals=False,
               fname_prefix="tempsyn"):
     """Generate deterministic solution, given initial and goal states.
@@ -571,7 +571,7 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="X",
         return tulip.automaton.Automaton(fname_prefix+".aut")
 
 
-def dsim(init, aut, W_actual, var_prefix="X", num_it=100):
+def dsim(init, aut, W_actual, var_prefix="Y", num_it=100):
     """Simulate application of controller (automaton) on actual world.
 
     The thrust is that a solution was synthesized for a world W that
@@ -630,7 +630,7 @@ def dsim(init, aut, W_actual, var_prefix="X", num_it=100):
     return history, True
 
 
-def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="X"):
+def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
     """Backtrack/patching algorithm, applied to deterministic problem.
 
     Note that this case is elementary and, being non-adversarial, may
@@ -793,9 +793,10 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="X"):
                             break
 
 
-def btsim_navobs(init, goal_list, aut, W_actual, num_obs, env_goal_list,
+def btsim_navobs(init, goal_list, aut, W_actual, num_obs,
+                 env_init_list, env_goal_list,
                  num_steps=100,
-                 var_prefix="X", env_prefix="Y"):
+                 var_prefix="Y", env_prefix="X"):
     """Sister to btsim_d, but now for solutions from gen_navobs_soln.
 
     Cf. doc for navobs_sim and gen_navobs_soln.
@@ -881,7 +882,7 @@ def btsim_navobs(init, goal_list, aut, W_actual, num_obs, env_goal_list,
                                         patch_goal_list[ind][1]-offset[1])
             init_loc = (history[-1][0]-offset[0], history[-1][1]-offset[1])
             aut_patch = gen_navobs_soln([init_loc], patch_goal_list, W_patch,
-                                        env_goal_list=None,
+                                        env_init_list=None, env_goal_list=None,
                                         var_prefix=var_prefix, env_prefix=env_prefix)
             if aut_patch is not None:
                 break  # Success! (i.e., patch problem is realizable)
@@ -986,7 +987,7 @@ def to_formula(aut_node):
         out_str += k+")"
     return out_str
 
-def extract_autcoord(aut_node, var_prefix="X"):
+def extract_autcoord(aut_node, var_prefix="Y"):
     """Pick out first true variable with name matching prefix_R_C format.
 
     aut_node should be an instance of class tulip.automaton.AutomatonState
