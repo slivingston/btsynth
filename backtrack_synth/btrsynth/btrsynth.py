@@ -3,9 +3,10 @@
 SCL; 2011 Aug, Sep, draft
 """
 
+from automaton import BTAutomaton
+
 import numpy as np
 import tulip.grgameint
-import tulip.automaton
 
 
 def errmsg(m):
@@ -307,7 +308,7 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
     gen_dsoln.  Nonetheless, env_goal_list may be empty or None, in
     which case no such restriction is placed on the environment.
 
-    Return instance of tulip.automaton.Automaton on success;
+    Return instance of btrsynth.BTAutomaton on success;
     None if not realizable, or an error occurs.
     """
     # Argument error checking
@@ -439,7 +440,7 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
     if not realizable:
         return None
     else:
-        return tulip.automaton.Automaton(fname_prefix+".aut")
+        return BTAutomaton(fname_prefix+".aut")
 
 
 def navobs_sim(init, aut, W_actual, num_obs, var_prefix="Y", env_prefix="X",
@@ -512,7 +513,7 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="Y",
     goal position to occur infinitely often, hence one []<>... formula
     per goal.
     
-    Return instance of tulip.automaton.Automaton on success;
+    Return instance of btrsynth.BTAutomaton on success;
     None if not realizable, or an error occurs.
     """
     if len(init_list) == 0:
@@ -568,7 +569,7 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="Y",
     if not realizable:
         return None
     else:
-        return tulip.automaton.Automaton(fname_prefix+".aut")
+        return BTAutomaton(fname_prefix+".aut")
 
 
 def dsim(init, aut, W_actual, var_prefix="Y", num_it=100):
@@ -647,7 +648,7 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
     (Note that this is not quite num_it as in the function dsim.)
 
     Returns an updated (to reflect the corrected controller)
-    instance of tulip.automaton.Automaton and the known world map at
+    instance of btrsynth.BTAutomaton and the known world map at
     time of completion.  Note that the ``known world'' may not match
     the given W_actual, because some parts of the world may never be
     visited (hence, uncertainty not corrected).
@@ -1004,14 +1005,16 @@ def extract_autcoord(aut_node, var_prefix="Y"):
         if len(k_parts) < 3:  # Conforms to locative naming scheme?
             continue
         if "_".join(k_parts[:-2]) == var_prefix:
-            coords.append(extract_coord(k))
+            coords.append(extract_coord(k)[1:])
     if len(coords) == 0:
         return None
     else:
         return coords
 
 def extract_coord(var_name):
-    """Assuming prefix_R_C format, extract and return (row,column) pair.
+    """Assuming prefix_R_C format, return (prefix,row,column) tuple.
+
+    prefix is of type string, row and column are integers.
 
     If error, return None or throw exception.
     """
@@ -1025,7 +1028,7 @@ def extract_coord(var_name):
         row = int(name_frags[-2])
     except ValueError:
         return None
-    return (row, col)
+    return ("_".join(name_frags[:-2]), row, col)
 
 
 ########################################
@@ -1033,6 +1036,6 @@ def extract_coord(var_name):
 ########################################
 
 def extract_coord_test():
-    assert(extract_coord("test_3_0") == (3, 0))
+    assert(extract_coord("test_3_0") == ("test", 3, 0))
+    assert(extract_coord("obstacle_5_4_11") == ("obstacle_5", 4, 11))
     assert(extract_coord("test3_0") is None)
-
