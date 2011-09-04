@@ -173,7 +173,16 @@ class BTAutomaton(tulip.automaton.Automaton):
                     else:
                         state_labels[str(state.id)+agent_name] = str(state.id)+";\\n {}"
 
+        # Initialization point
+        output += "    \"\" [shape=circle,style=filled,color=black];\n"
+        
+        # All nodes and edges
         for state in self.states:
+            if len(self.getAutInSet(state.id)) == 0:
+                # Treat init nodes specially
+                output += "    \"\" -> \"" \
+                    + state_labels[str(state.id)+"sys"] +"\" [label=\""
+                output += state_labels[str(state.id)+"env"] + "\"];\n"
             for trans in state.transition:
                 output += "    \""+ state_labels[str(state.id)+"sys"] +"\" -> \"" \
                     + state_labels[str(self.states[trans].id)+"sys"] +"\" [label=\""
