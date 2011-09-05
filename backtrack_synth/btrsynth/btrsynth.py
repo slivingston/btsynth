@@ -34,7 +34,7 @@ def read_world(world_str):
     init_list = []
     env_goal_list = []
     env_init_list = []
-    empty_return = None, None, None, None, None
+    empty_return = (None, None, None, None, None)
     world = np.array([], dtype=np.uint8)  # In case given string is lame.
     for line in world_str.split("\n"):
         line_counter += 1
@@ -132,7 +132,8 @@ def read_worldf(fname):
     return read_world("\n".join(wstr_list))
 
 def pretty_world(W, goal_list=[], init_list=[], env_init_list=[],
-                 simresult=None):
+                 simresult=None,
+                 show_grid=False):
     """Given world matrix W, return pretty-for-printing string.
 
     If simresult is not None, it should be a pair consisting of a list
@@ -147,6 +148,9 @@ def pretty_world(W, goal_list=[], init_list=[], env_init_list=[],
     inserted into the pretty map as appropriate.
 
     If env_init_list is nonempty, "E" is inserted where appropriate.
+    
+    If show_grid is True, then grid the pretty world and show row and
+    column labels along the outer edges.
 
     Return None on failure (or lame arguments).
     """
@@ -180,7 +184,10 @@ def pretty_world(W, goal_list=[], init_list=[], env_init_list=[],
         if len(simresult) > 2:
             for loc in simresult[2]:
                 W[loc[0]][loc[1]] = 6
-    out_str = "-"*(W.shape[1]+2) + "\n"
+    if show_grid:
+        out_str = "  " + "".join([str(k).rjust(2) for k in range(W.shape[1])]) + "\n"
+    else:
+        out_str = "-"*(W.shape[1]+2) + "\n"
     if (goal_list is not None) and len(goal_list) > 0:
         for loc in goal_list:
             W[loc[0]][loc[1]] = 10
@@ -191,8 +198,14 @@ def pretty_world(W, goal_list=[], init_list=[], env_init_list=[],
         for loc in env_init_list:
             W[loc[0]][loc[1]] = 12
     for i in range(W.shape[0]):
-        out_str += "|"
+        if show_grid:
+            out_str += "  " + "-"*(W.shape[1]*2+1) + "\n"
+            out_str += str(i).rjust(2)
+        else:
+            out_str += "|"
         for j in range(W.shape[1]):
+            if show_grid:
+                out_str += "|"
             if W[i][j] == 0:
                 out_str += " "
             elif W[i][j] == 1:
@@ -216,8 +229,10 @@ def pretty_world(W, goal_list=[], init_list=[], env_init_list=[],
             else:
                 raise ValueError("Unrecognized world W encoding.")
         out_str += "|\n"
-        #out_str += "|" + ''.join([k*"*"+(1-k)*" " for k in W[i]]) + "|\n"
-    out_str += "-"*(W.shape[1]+2) + "\n"
+    if show_grid:
+        out_str += "  " + "-"*(W.shape[1]*2+1) + "\n"
+    else:
+        out_str += "-"*(W.shape[1]+2) + "\n"
     return out_str
 
 def LTL_world(W, var_prefix="obs"):
