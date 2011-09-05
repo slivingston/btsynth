@@ -11,13 +11,67 @@ import copy
 import tulip.automaton
 
 
+class BTAutomatonNode(tulip.automaton.AutomatonState):
+    """btrsynth-related extension of TuLiP automaton nodes.
+
+    Adds support for transition selection based on memory contents.
+
+    Use BTAutomatonNode(tulip_autnode=node), where node is an instance
+    of TuLiP AutomatonState class, to deep copy an existing object.
+    """
+    def __init__(self, id=-1, state={}, transition=[],
+                 tulip_autnode=None):
+        if tulip_autnode is not None:
+            self.id = tulip_autnode.id
+            self.state = copy.deepcopy(tulip_autnode.state)
+            self.transition = copy.deepcopy(tulip_autnode.transition)
+        else:
+            tulip.automaton.AutomatonState.__init__(self, id, state, transition)
+        self.cond = None
+
+    def addEdgeCondition(self, cond):
+        """If more than one transition satisfies an input symbol, call cond.
+
+        Calling as cond(memory, node_id, node_Out)
+
+        where memory is the finite memory of the automaton (a
+        dictionary; see notes for class BTAutomaton), node_id is the
+        ID of the calling node, and node_Out is set of outward
+        transitions that are in conflict (hence a subset of self.transition).
+
+        If given cond is not callable, then do not change current
+        condition routine, and return False. Else, return True.
+        """
+        if callable(cond):
+            self.cond = cond
+            return True
+        else:
+            return False
+
+
 class BTAutomaton(tulip.automaton.Automaton):
-    """(This may be superfluous.)
+    """btrsynth-related extension of TuLiP Automaton.
 
     Use BTAutomaton(tulip_aut=aut), where aut is an instance of the
     TuLiP Automaton class, to deep copy an existing object.
 
-    ...motivated by the need for some methods specific to my experiments.
+    Includes finite (but arbitrarily large) memory and support for
+    transition conditioned on memory contents. Details are below.
+
+    Memory in the automaton takes the form of a dictionary with keys
+    being the memory variables names, and values being
+    integers. Transition conditionals are provided to resolve
+    conflicts between possible edges.  Let v be a node, and let x be
+    the next input symbol.  If more than one transition in Out(v) is
+    labeled with x, then the conflict dictionary for v is searched for
+    key x. If found, the conditional statement is evaluated given
+    contents of memory, and the appropriate edge is thus selected.
+    See docstrings of relevant methods for usage details.
+
+    Note that nodes in this class are BTAutomatonNode objects.
+
+    Manipulation of memory contents is managed externally using class
+    access methods.
     """
     def __init__(self, states_or_file=[], varnames=[], verbose=0,
                  tulip_aut=None):
@@ -27,6 +81,61 @@ class BTAutomaton(tulip.automaton.Automaton):
         else:
             tulip.automaton.Automaton.__init__(self, states_or_file=states_or_file,
                                                varnames=varnames, verbose=verbose)
+        self.recastBTAutNodes()
+        self.memory = None  
+        # None indicates memory uninitialized; thus behaviorally
+        # equivalent to automaton without memory.
+
+    def recastBTAutNodes(self):
+        """Cast any nodes of class tulip.AutomatonState into BTAutomatonNode.
+        """
+        for k in range(len(self.states)):
+            if not isinstance(self.states[k], BTAutomatonNode):
+                self.states[k] = BTAutomatonNode(tulip_autnode=self.states[k])
+
+    def memInit(self, name_list):
+        """Initialize memory, with variable names in the given list.
+
+        Contents are set to 0.
+        """
+        self.memory = dict([(k, 0) for k in name_list])
+
+    def memSet(self, name, new_value):
+        """Set value in a memory variable.
+
+        Returns previous value, or None on error.
+        """
+        if not isinstance(new_value, int) \
+                or (self.memory is None) or not self.memory.has_key(name):
+            return None
+        prev_val = self.memory[name]
+        self.memory[name] = new_value
+        return prev_val
+    
+    def memClear(self, name):
+        """Clear (set to zero) memory variable.
+
+        Return True on succes, False on failure.
+        """
+        if self.memSet(name, 0) is None:
+            return False
+        else:
+            return True
+
+    def addGroupCondition(self, ID_list, cond):
+        """Set edge condition to cond for all nodes in ID_list.
+
+        On success return -1, on failure return first ID in ID_list
+        where error occurred.
+
+        N.B., changes are incremental, so on error some of the nodes
+        have already been updated!
+        """
+        for k in ID_list:
+            autnode = self.getAutState(k)
+            if (autnode is None) or (not autnode.addEdgeCondition(cond)):
+                return k
+        return -1
 
     def writeDotFileCoordNodes(self, fname, hideZeros=False,
                      distinguishTurns=None, turnOrder=None):
@@ -126,7 +235,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         for k in self.states[0].state.keys():
             if k.startswith(var_prefix):
                 sys_vars.append(k)
-        if len(env_vars) == 0 or len(sys_vars) == 0:
+        if len(sys_vars) == 0:
             return False
 
         # Make looping possible
@@ -167,7 +276,10 @@ class BTAutomaton(tulip.automaton.Automaton):
                         state_labels[str(state.id)+agent_name] += ", "+label_str
             
             for agent_name in agents.keys():
-                if len(state_labels[str(state.id)+agent_name]) == 0:
+                if (agent_name == "env") and (len(env_vars) == 0):
+                    # Special case: deterministic problem
+                    state_labels[str(state.id)+agent_name] = ""
+                elif len(state_labels[str(state.id)+agent_name]) == 0:
                     if not hideAgentNames:
                         state_labels[str(state.id)+agent_name] = str(state.id)+"::"+agent_name+";\\n {}"
                     else:

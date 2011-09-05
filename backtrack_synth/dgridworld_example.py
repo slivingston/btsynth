@@ -8,7 +8,8 @@ SCL; 2011 Aug, draft
 import tulip
 import sys
 
-from btrsynth import *
+from btrsynth.btrsynth import *
+from btrsynth.automaton import BTAutomaton
 
 
 if __name__ == "__main__":
@@ -36,7 +37,7 @@ if __name__ == "__main__":
     print "Resulting solution automaton M has %d nodes." % aut.size()
     aut.trimDeadStates()
     print "After trimming dead nodes, M has size %d" % aut.size()
-    aut.writeDotFile(fname="tempsyn-ORIG.dot", hideZeros=True)
+    aut.writeDotFileCoord(fname="tempsyn-ORIG.dot")
 
     print "Actual world:"
     print pretty_world(W_actual)
@@ -44,7 +45,7 @@ if __name__ == "__main__":
     print "sim and patch..."
     (aut_patched, W_patched) = btsim_d(init_list[0], goal_list, aut, W_actual, num_steps=100)
     
-    aut_patched.writeDotFile(fname="tempsyn-PATCHED.dot", hideZeros=True)
+    aut_patched.writeDotFileCoord(fname="tempsyn-PATCHED.dot")
 
     history, intent = dsim(init_list[0], aut_patched, W_actual, num_it=100)
     
