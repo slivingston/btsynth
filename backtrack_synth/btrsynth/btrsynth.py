@@ -299,8 +299,8 @@ def LTL_world(W, var_prefix="obs"):
 
 def gen_navobs_soln(init_list, goal_list, W, num_obs,
                     env_init_list, env_goal_list,
+                    goals_disjunct=None, env_disjunction_goals=False,
                     var_prefix="Y", env_prefix="X",
-                    disjunction_goals=False, env_disjunction_goals=False,
                     fname_prefix="tempsyn"):
     """Generate solution as in gen_dsoln but now with dynamic obstacles.
 
@@ -333,9 +333,8 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
     # Handle degenerate case of no obstacles (thus, deterministic problem).
     if num_obs < 1:
         return gen_dsoln(init_list=init_list, goal_list=goal_list, W=W,
-                         var_prefix=var_prefix,
-                         disjunction_goals=disjunction_goals,
-                         fname_prefix=fname_prefix)
+                         goals_disjunct=goals_disjunct,
+                         var_prefix=var_prefix, fname_prefix=fname_prefix)
 
     ########################################
     # Environment prep
@@ -379,17 +378,22 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
         init_str += "(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
 
     goal_str = ""
-    if not disjunction_goals:
-        for loc in goal_list:
-            if len(goal_str) > 0:
-                goal_str += " & "
-            goal_str += "[]<>(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
-    else:
-        for loc in goal_list:
-            if len(goal_str) == 0:
-                goal_str += "[]<>( s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
-            goal_str += " | s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
-        goal_str += " )"
+    for loc in goal_list:
+        if len(goal_str) > 0:
+            goal_str += " & "
+        goal_str += "[]<>(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+    
+    if goals_disjunct is not None:
+        goal_dstr = ""
+        for loc in goals_disjunct:
+            if len(goal_dstr) == 0:
+                if len(goal_str) == 0:
+                    goal_dstr += "[]<>( s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+                else:
+                    goal_dstr += " & []<>( s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+            goal_dstr += " | s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+        goal_dstr += " )"
+        goal_str += goal_dstr
 
     ########################################
     # Interaction: avoid collisions
@@ -513,21 +517,18 @@ def navobs_sim(init, aut, W_actual, num_obs, var_prefix="Y", env_prefix="X",
     return history, True, obs_poses
 
 
-def gen_dsoln(init_list, goal_list, W, var_prefix="Y",
-              disjunction_goals=False,
-              fname_prefix="tempsyn"):
+def gen_dsoln(init_list, goal_list, W, goals_disjunct=None,
+              var_prefix="Y", fname_prefix="tempsyn"):
     """Generate deterministic solution, given initial and goal states.
 
     init_list is a list of pairs (row, col), signifying locations in
     the world matrix W from which the system can be initialized.
     Similarly for goal_list, but locations to visit infinitely often.
 
-    If disjunction_goals is True, then the given goal positions appear
-    in a single []<>... formula, combined in a disjunction (i.e. "or"
-    statements).  The default (disjunction_goals = False) is for each
-    goal position to occur infinitely often, hence one []<>... formula
-    per goal.
-    
+    If goals_disjunct is not None, then it must be a list of (row,
+    col) pairs specifying goals to be combined disjunctively in a
+    single []<>... formula.  The default (None) does nothing.
+
     Return instance of btrsynth.BTAutomaton on success;
     None if not realizable, or an error occurs.
     """
@@ -543,17 +544,22 @@ def gen_dsoln(init_list, goal_list, W, var_prefix="Y",
         init_str += "(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
 
     goal_str = ""
-    if not disjunction_goals:
-        for loc in goal_list:
-            if len(goal_str) > 0:
-                goal_str += " & "
-            goal_str += "[]<>(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
-    else:
-        for loc in goal_list:
-            if len(goal_str) == 0:
-                goal_str += "[]<>( s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
-            goal_str += " | s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
-        goal_str += " )"
+    for loc in goal_list:
+        if len(goal_str) > 0:
+            goal_str += " & "
+        goal_str += "[]<>(" + "s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+
+    if goals_disjunct is not None:
+        goal_dstr = ""
+        for loc in goals_disjunct:
+            if len(goal_dstr) == 0:
+                if len(goal_str) == 0:
+                    goal_dstr += "[]<>( s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+                else:
+                    goal_dstr += " & []<>( s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+            goal_dstr += " | s."+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+        goal_dstr += " )"
+        goal_str += goal_dstr
 
     # Create SMV file
     with open(fname_prefix+".smv", "w") as f:
@@ -630,10 +636,9 @@ def dsim(init, aut, W_actual, var_prefix="Y", num_it=100):
     it_counter = 0
     while it_counter < num_it:
         it_counter += 1
-        next_node = aut.findNextAutState(next_node, env_state={},
-                                         deterministic_env=True)
-        if next_node == -1:
-            raise ValueError("Reached deadend in Automaton; cannot find next node.")
+        next_node_id = aut.execNextAutState(next_node.id, env_state={})
+        next_node = aut.getAutState(next_node_id)
+        # N.B., execNextAutState raises an exception on error.
         next_loc = extract_autcoord(next_node, var_prefix=var_prefix)
         if next_loc is None:
             raise ValueError("Given automaton is incomplete; reached deadend.")
@@ -649,8 +654,8 @@ def dsim(init, aut, W_actual, var_prefix="Y", num_it=100):
 def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
     """Backtrack/patching algorithm, applied to deterministic problem.
 
-    Note that this case is elementary and, being non-adversarial, may
-    be better addressed by other methods (e.g., graph search or D*).
+    This case is elementary and, being non-adversarial, may be better
+    addressed by other methods (e.g., graph search or D*).
     Nonetheless it provides a decent base case for testing the idea.
 
     num_steps is the number of simulation steps to run; this count is
@@ -658,9 +663,10 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
       1. sim to fault or num_steps reached;
       2. if fault, run backtrack/patch algorithm to improve automaton;
         goto step 1 (after updating aut)
-      3. else (total step count num_steps reached), quit.
+      3. else (total step count num_steps reached; simulation without
+        fault), quit.
     
-    (Note that this is not quite num_it as in the function dsim.)
+    (num_steps is not the same as num_it in the function dsim.)
 
     Returns an updated (to reflect the corrected controller)
     instance of btrsynth.BTAutomaton and the known world map at
@@ -712,101 +718,99 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
                     patch_goal_list.append(v)
             fail_loc_var = var_prefix+"_"+str(intent[0])+"_"+str(intent[1])
             S_block = aut.findAllAutPartState({fail_loc_var : 1})
-            S_Pre = []
-            for node in aut.states:
-                for bad_node in S_block:
-                    if bad_node.id in node.transition:
-                        for bad_node_redund in S_block:
-                            # To ensure S_Pre has empty intersection with S_block
-                            if node.id == bad_node_redund.id:
-                                break
-                        S_Pre.append(node)
-                        break
-            S_Post = {}
-            # Dictionary with keys of IDs of nodes in S_Pre, and values in
-            # S\S_block (AutomatonState instances), thus
-            # expressing a reachability relationship (or ``branchout set''
-            # in the terminology of the paper).
-            for node in S_Pre:
-                S_Post[node.id] = []
-                for bad_node in S_block:
-                    if bad_node.id in node.transition:
-                        for post_node_id in bad_node.transition:
-                            post_node = aut.getAutState(post_node_id)
-                            if post_node == -1:
-                                raise ValueError("inconsistent edge labelling in automaton.")
-                            if post_node in S_block:
-                                continue  # Do not include outgoing edges going back to S_block.
-                            S_Post[node.id].append(post_node)
-            for exit_node in S_Post.values():
-                # This deviates from the algorithm! (a convenience hack; may fail)
-                patch_goal_list.append(extract_autcoord(exit_node[0],
-                                                        var_prefix=var_prefix)[0])
+            
+            # Set of nodes in M corresponding to abstract nbhd.
+            Reg = aut.computeGridReg(nbhd=nbhd_inclusion, var_prefix=var_prefix)
+            Init = set([node.id for node in aut.getAutInit()]) & set(Reg)
+            Entry = aut.findEntry(Reg)
+            Exit = aut.findExit(Reg)
+            
             W_patch, offset = subworld(W_actual, nbhd_inclusion)
             # Shift coordinates to be w.r.t. W_patch
             for ind in range(len(patch_goal_list)):
                 patch_goal_list[ind] = (patch_goal_list[ind][0]-offset[0],
                                         patch_goal_list[ind][1]-offset[1])
-            init_loc = (history[-1][0]-offset[0], history[-1][1]-offset[1])
-            aut_patch = gen_dsoln([init_loc], patch_goal_list, W_patch)
-            if aut_patch is not None:
-                break  # Success! (i.e., patch problem is realizable)
+            #init_loc = (history[-1][0]-offset[0], history[-1][1]-offset[1])
+            
+            patch_auts = []
+            fail_flag = False
+            for l in Init|set(Entry):
+                init_loc = extract_autcoord(aut.getAutState(l), var_prefix=var_prefix)[0]
+                init_loc = (init_loc[0]-offset[0], init_loc[1]-offset[1])
+                local_goals_IDs = list(aut.computeReach(l, Reg) & set(Exit))
+                local_goals = []
+                for goal_ID in local_goals_IDs:
+                    local_goals.append(extract_autcoord(aut.getAutState(goal_ID),
+                                                        var_prefix=var_prefix)[0])
+                    local_goals[-1] = (local_goals[-1][0]-offset[0],
+                                       local_goals[-1][1]-offset[1])
+                aut_patch = gen_dsoln(init_list=[init_loc], goal_list=patch_goal_list,
+                                      W=W_patch, goals_disjunct=local_goals,
+                                      var_prefix=var_prefix, fname_prefix="tempsyn-"+str(l))
+                if aut_patch is not None:
+                    patch_auts.append((aut_patch, l, local_goals_IDs))
+                else:
+                    fail_flag = True
+                    break
+            if not fail_flag:
+                break
 
         # Merge (in several steps)
 
-        # Trim bad nodes from aut; note that we just delete ingoing
-        # and outgoing edges from all nodes in S_block.  The result is
-        # a set of ``floater'' nodes.
-        for ind in range(len(S_Pre)):
-            for bad_ind in range(len(S_block)):
-                try:
-                    S_Pre[ind].transition.remove(S_block[bad_ind].id)
-                except ValueError:
-                    pass
-                S_block[bad_ind].transition = []
+        # Adjust map coordinates from local (patch-centric) to global,
+        # and expand set of variables of the patch to include all
+        # those of the (original) global problem.
+        patch_id_maps = []
+        full_state = aut.states[0].state.keys()  # Pick out full variable list
+        for aut_ind in range(len(patch_auts)):
+            Ml = patch_auts[aut_ind][0]
+            for node in Ml.states:
+                prev_keys = node.state.keys()
+                (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
+                node.state = dict([(k, 0) for k in full_state])
+                node.state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
+            patch_id_maps.append(aut.importChildAut(Ml))
 
-        # Import all nodes from M_patch into M. Keep track of the
-        # assigned IDs.
-        max_id = -1
-        for node in aut.states:
-            if node.id > max_id:
-                max_id = node.id
-        # Offset all IDs in M_patch by max_id+1
-        for node in aut_patch.states:
-            node.transition = [max_id+1+k for k in node.transition]
-            node.id += max_id+1
-            (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
-            node.state[var_prefix+"_"+str(i)+"_"+str(j)] = 0
-            node.state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
-            aut.addAutState(node)
+        # Attach entry and exit points
+        for aut_ind in range(len(patch_auts)):
+            l = patch_auts[aut_ind][1]
+            Ml = patch_auts[aut_ind][0]
+            local_goals_IDs = patch_auts[aut_ind][2]
+            #init_loc = extract_autcoord(aut.getAutState(l), var_prefix=var_prefix)[0]
+            entry_node = aut.getAutState(l)
+            match_list = Ml.findAllAutState(entry_node.state)
+            if len(match_list) == 0:
+                raise Exception("FATAL")
+            # Shortcut, given we are only addressing deterministic
+            # (non-adversarial) problem in this example
+            entry_node.transition = [patch_id_maps[aut_ind][match_list[0].transition[0]]]
 
-        # Add offset back in
-        for ind in range(len(patch_goal_list)):
-            patch_goal_list[ind] = (patch_goal_list[ind][0]+offset[0],
-                                    patch_goal_list[ind][1]+offset[1])
-        init_loc = (history[-1][0]+offset[0], history[-1][1]+offset[1])
+            match_flag = False
+            for local_goal_ID in local_goals_IDs:
+                goal_node = aut.getAutState(local_goal_ID)
+                match_list = Ml.findAllAutState(goal_node.state)
+                if len(match_list) > 0:
+                    match_flag = True
+                for match_node in match_list:
+                    aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition.extend(goal_node.transition)
+            if not match_flag:
+                raise Exception("FATAL")
+            
 
-        # Patch-in edges
+        #DEBUG
+        aut.writeDotFileCoord(fname="tempsyn-FRAG.dot")
+        exit(0)
 
-        for ind in range(len(S_Pre)):
-            for new_ind in range(len(aut_patch.states)):
-                if extract_autcoord(S_Pre[ind], var_prefix=var_prefix)[0] == extract_autcoord(aut_patch.states[new_ind], var_prefix=var_prefix)[0]:
-                    # Should be breadth-first search to find out-paths into S_Post[S_Pre[ind].id]
-                    S_Pre[ind].transition = aut_patch.states[new_ind].transition[:]
-                    break
-
-        for patch_goal in patch_goal_list:
-            for new_ind in range(len(aut_patch.states)):
-                if extract_autcoord(aut_patch.states[new_ind], var_prefix=var_prefix)[0] != patch_goal:
-                    continue
-                for pre_node in S_Pre:
-                    for post_ind in range(len(S_Post[pre_node.id])):
-                        if extract_autcoord(S_Post[pre_node.id][post_ind], var_prefix=var_prefix)[0] == patch_goal:
-                            for node_ind in range(len(aut.states)):
-                                for trans_ind in range(len(aut.states[node_ind].transition)):
-                                    if aut.states[node_ind].transition[trans_ind] == aut_patch.states[new_ind].id:
-                                        aut.states[node_ind].transition[trans_ind] = S_Post[pre_node.id][post_ind].id
-                            break
+        # # Trim bad nodes from aut; note that we just delete ingoing
+        # # and outgoing edges from all nodes in S_block.  The result is
+        # # a set of ``floater'' nodes.
+        # for ind in range(len(S_Pre)):
+        #     for bad_ind in range(len(S_block)):
+        #         try:
+        #             S_Pre[ind].transition.remove(S_block[bad_ind].id)
+        #         except ValueError:
+        #             pass
+        #         S_block[bad_ind].transition = []
 
 
 def btsim_navobs(init, goal_list, aut, W_actual, num_obs,
@@ -897,7 +901,7 @@ def btsim_navobs(init, goal_list, aut, W_actual, num_obs,
                 patch_goal_list[ind] = (patch_goal_list[ind][0]-offset[0],
                                         patch_goal_list[ind][1]-offset[1])
             init_loc = (history[-1][0]-offset[0], history[-1][1]-offset[1])
-            aut_patch = gen_navobs_soln([init_loc], patch_goal_list, W_patch,
+            aut_patch = gen_navobs_soln([init_loc], patch_goal_list, W_patch, num_obs,
                                         env_init_list=None, env_goal_list=None,
                                         var_prefix=var_prefix, env_prefix=env_prefix)
             if aut_patch is not None:
@@ -929,7 +933,7 @@ def btsim_navobs(init, goal_list, aut, W_actual, num_obs,
             (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
             node.state[var_prefix+"_"+str(i)+"_"+str(j)] = 0
             node.state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
-            aut.addAutState(node)
+            aut.addAutNode(node)
 
         # Add offset back in
         for ind in range(len(patch_goal_list)):
@@ -1006,7 +1010,7 @@ def to_formula(aut_node):
 def extract_autcoord(aut_node, var_prefix="Y"):
     """Pick out first true variable with name matching prefix_R_C format.
 
-    aut_node should be an instance of class tulip.automaton.AutomatonState
+    aut_node should be an instance of class BTAutomatonNode.
 
     Return coordinate as given by extract_coord.  If more than one
     true variable has a matching prefix, return the corresponding list

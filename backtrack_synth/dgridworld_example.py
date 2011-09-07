@@ -38,6 +38,7 @@ if __name__ == "__main__":
     aut.trimDeadStates()
     print "After trimming dead nodes, M has size %d" % aut.size()
     aut.writeDotFileCoord(fname="tempsyn-ORIG.dot")
+    aut.writeFile("tempsyn-ORIG.aut")
 
     print "Actual world:"
     print pretty_world(W_actual)
