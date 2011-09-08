@@ -7,6 +7,7 @@ SCL; 2011 Sep, draft
 
 import btrsynth as bts
 
+import random
 import copy
 import tulip.automaton
 
@@ -203,11 +204,11 @@ class BTAutomaton(tulip.automaton.Automaton):
             kill_list = []
             for k in range(len(self.states)):
                 if len(self.states[k].transition) == 0:
-                    kill_list.append(k)
+                    kill_list.append(self.states[k].id)
             if len(kill_list) == 0:
                 break
-            for k in kill_list:
-                self.removeNode(self.states[k].id)
+            for k_ID in kill_list:
+                self.removeNode(k_ID)
         self.packIDs()
 
     def trimUnconnectedStates(self):
@@ -406,7 +407,8 @@ class BTAutomaton(tulip.automaton.Automaton):
                 return k
         return -1
 
-    def execNextAutState(self, node_id, env_state={}):
+    def execNextAutState(self, node_id, env_state={},
+                         randNext=False):
         """Similar to findNextAutState, but runs rule and cond.
 
         1. find all possible next nodes, given node_id and (full!)
@@ -419,6 +421,14 @@ class BTAutomaton(tulip.automaton.Automaton):
            simulate ``taking'' the corresponding transition by
            applying the rule of the next node, given the environment
            state and memory that resulted in the transition.
+
+        If randNext is True, then the keys of env_state are used to
+        determine the environment variables (and the values of
+        env_state are ignored).  One of the outgoing transitions from
+        node_id is randomly (uniform probability) selected, the
+        environment state (or ``valuation'') in the next node is found
+        and set to env_state, and then this method proceeds as usual.
+        The default is randNext = False.
         
         IMPORTANT: we deviate from findNextAutState by taking an
         argument of node ID, and returning an ID. This is a design
@@ -441,6 +451,12 @@ class BTAutomaton(tulip.automaton.Automaton):
         node = self.getAutState(node_id)
         if node == -1:
             raise Exception("Given node ID not recognized.")
+
+        if randNext:
+            sample_node_ID = random.choice(node.transition)
+            sample_node = self.getAutState(sample_node_ID)
+            for k in env_state.keys():
+                env_state[k] = sample_node.state[k]
         
         transition = []  # n.b., ID and index into node.transition
         
@@ -532,7 +548,7 @@ class BTAutomaton(tulip.automaton.Automaton):
                 Exit.append(node_id)
         return Exit
 
-    def computeReach(self, node_id, subS, reachable=set()):
+    def computeReach(self, node_id, subS):
         """Restricted reachable set from node_id, where paths in subS.
 
         Be careful. Reachability computation can be expensive.
@@ -544,14 +560,20 @@ class BTAutomaton(tulip.automaton.Automaton):
         node = self.getAutState(node_id)
         if node == -1:
             raise Exception("Failed to find node with ID "+str(node_id))
-        this_reachable = set()
-        for next_id in set(node.transition):
-            if (next_id not in subS) or (next_id in reachable):
-                continue
-            this_reachable |= self.computeReach(next_id,
-                                           subS=subS,
-                                           reachable=set([node_id, next_id])|this_reachable.copy())
-        return reachable | this_reachable
+
+        # Fix-point approach
+        prev_set = set([node_id])
+        this_set = prev_set.copy()
+        while True:
+            for next_node_ID in prev_set:
+                next_node = self.getAutState(next_node_ID)
+                for out_ID in next_node.transition:
+                    if (out_ID in subS) and (out_ID not in prev_set):
+                        this_set.add(out_ID)
+            if prev_set == this_set:
+                return this_set
+            else:
+                prev_set = this_set.copy()
 
     def writeDotFileCoordNodes(self, fname, hideZeros=False,
                      distinguishTurns=None, turnOrder=None):
