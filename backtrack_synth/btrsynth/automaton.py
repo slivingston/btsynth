@@ -513,7 +513,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         for k in range(len(self.states)):
             coord = bts.extract_autcoord(self.states[k], var_prefix=var_prefix)
             if coord is not None and len(coord) > 1:
-                raise ValueError("more than position match; error?")
+                raise ValueError("more than one position match; error?")
             if (coord is not None) and (coord[0] in nbhd):
                 Reg.append(self.states[k].id)
         return Reg
@@ -610,7 +610,7 @@ class BTAutomaton(tulip.automaton.Automaton):
                                 agent_name = agent_candidate
                                 break
                         if agent_name is None:
-                            printWarning("variable \""+k+"\" does not belong to an agent in distinguishedTurns")
+                            print "WARNING: variable \""+k+"\" does not belong to an agent in distinguishedTurns"
                             return False
 
                     if (v != 0) and (bts.extract_coord(k) is not None):
@@ -695,14 +695,18 @@ class BTAutomaton(tulip.automaton.Automaton):
                             agent_name = agent_candidate
                             break
                     if agent_name is None:
-                        printWarning("variable \""+k+"\" does not belong to an agent in distinguishedTurns")
+                        import pdb; pdb.set_trace()
+                        print "WARNING: variable \""+k+"\" does not belong to an agent in distinguishedTurns"
                         return False
 
                     if (v != 0) and (bts.extract_coord(k) is not None):
                         coord = bts.extract_coord(k)
                         # Be aggressive about prefix spacing
                         label_str = "".join(coord[0].split("_"))
-                        label_str += " ("+str(coord[1])+", "+str(coord[2])+")"
+                        if coord[1:] == (-1, -1):
+                            label_str += " (nil)"
+                        else:
+                            label_str += " ("+str(coord[1])+", "+str(coord[2])+")"
                     else:
                         label_str = k+": "+str(v)
                     if len(state_labels[str(state.id)+agent_name]) == 0:

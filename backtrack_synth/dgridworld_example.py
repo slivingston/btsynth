@@ -21,11 +21,9 @@ if __name__ == "__main__":
     num_obs = 1
     env_goal_list=[(2,0)]
 
-    (W, goal_list, init_list, tmp, env_init_list) = read_worldf(sys.argv[1])
-    del tmp
+    (W, goal_list, init_list, env_init_list) = read_worldf(sys.argv[1])
     # The "..._actual" naming scheme is a bit obnoxious.
-    (W_actual, goal_list_actual, init_list_actual, tmp, env_init_list_actual) = read_worldf(sys.argv[2])
-    del tmp
+    (W_actual, goal_list_actual, init_list_actual, env_init_list_actual) = read_worldf(sys.argv[2])
 
     print "Nominal world:"
     print pretty_world(W, goal_list=goal_list, init_list=init_list,
