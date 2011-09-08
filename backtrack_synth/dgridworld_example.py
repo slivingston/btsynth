@@ -53,3 +53,5 @@ if __name__ == "__main__":
     print intent
     print pretty_world(W_actual, goal_list=goal_list, init_list=init_list,
                        simresult=[history, intent])
+
+    print history

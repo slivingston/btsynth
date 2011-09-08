@@ -651,6 +651,47 @@ def dsim(init, aut, W_actual, var_prefix="Y", num_it=100):
     return history, True
 
 
+def cond_anynot(memory):
+    if len(memory) == 0:
+        raise ValueError("Cannot apply transition-conditional on empty memory.")
+    if 0 in memory.values():
+        return True
+    else:
+        return False
+
+def cond_all(memory):
+    if len(memory) == 0:
+        raise ValueError("Cannot apply transition-conditional on empty memory.")
+    if 0 in memory.values():
+        return False
+    else:
+        return True
+
+def rule_clearall(aut, memory, prev_node_id, node_id, this_input):
+    """Clear all memory values, regardless."""
+    return dict([(k, 0) for k in memory.keys()])
+
+def rule_setmatch(aut, memory, prev_node_id, node_id, this_input):
+    """Set memory variables nonzero depending on edge-node labeling.
+
+    For each memory variable name that is also an environment or
+    system variable, if the present node (from which the rule was
+    invoked) is labeled (or its incoming edge is labeled) with this
+    variable being nonzero (i.e. True as a Boolean variable), then set
+    that memory to 1.
+
+    N.B., this rule acts one-way, i.e. it can only *set* memory
+    variables, not clear them.
+    """
+    node = aut.getAutState(node_id)
+    if node == -1:
+        raise Exception("FATAL: rule called with invalid node ID.")
+    for k in memory.keys():
+        if node.state.has_key(k) and node.state[k] != 0:
+            memory[k] = 1
+    return memory
+
+
 def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
     """Backtrack/patching algorithm, applied to deterministic problem.
 
@@ -758,6 +799,10 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
 
         # Merge (in several steps)
 
+        # Set rule to clearing mem cells for nodes in the original M
+        for node in aut.states:
+            node.addNodeRule(rule_clearall)
+
         # Adjust map coordinates from local (patch-centric) to global,
         # and expand set of variables of the patch to include all
         # those of the (original) global problem.
@@ -770,20 +815,28 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
                 (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
                 node.state = dict([(k, 0) for k in full_state])
                 node.state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
+                node.addNodeRule(rule_setmatch)
             patch_id_maps.append(aut.importChildAut(Ml))
+
+        # Undo offset of the part of sys goal list addressed in patch
+        for k in range(len(patch_goal_list)):
+            patch_goal_list[k] = (patch_goal_list[k][0]+offset[0],
+                                  patch_goal_list[k][1]+offset[1])
+
+        # Add memory for these goals
+        aut.memInit([var_prefix+"_"+str(i)+"_"+str(j) for (i, j) in patch_goal_list])
 
         # Attach entry and exit points
         for aut_ind in range(len(patch_auts)):
             l = patch_auts[aut_ind][1]
             Ml = patch_auts[aut_ind][0]
             local_goals_IDs = patch_auts[aut_ind][2]
-            #init_loc = extract_autcoord(aut.getAutState(l), var_prefix=var_prefix)[0]
             entry_node = aut.getAutState(l)
             match_list = Ml.findAllAutState(entry_node.state)
             if len(match_list) == 0:
                 raise Exception("FATAL")
             # Shortcut, given we are only addressing deterministic
-            # (non-adversarial) problem in this example
+            # (non-adversarial) problem in this example.
             entry_node.transition = [patch_id_maps[aut_ind][match_list[0].transition[0]]]
 
             match_flag = False
@@ -793,7 +846,16 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
                 if len(match_list) > 0:
                     match_flag = True
                 for match_node in match_list:
-                    aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition.extend(goal_node.transition)
+                    if len(aut.getMem()) > 0:
+                        aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond = [cond_anynot for k in aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition]
+                        aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond.extend([cond_all for k in goal_node.cond])
+                        aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition.extend(goal_node.transition)
+                    else:
+                        aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond = [None for k in aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition]
+                        aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond.extend([None for k in goal_node.cond])
+                        aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition = goal_node.transition[:]
+                    
+                    
             if not match_flag:
                 raise Exception("FATAL")
             
@@ -809,10 +871,6 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
         # Pick-off invalid initial nodes
         aut.removeFalseInits(S0)
         aut.packIDs()
-
-        #DEBUG
-        aut.writeDotFileCoord(fname="tempsyn-FRAG.dot")
-        exit(0)
 
 
 def btsim_navobs(init, goal_list, aut, W_actual, num_obs,

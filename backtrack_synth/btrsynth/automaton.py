@@ -15,26 +15,53 @@ class BTAutomatonNode(tulip.automaton.AutomatonState):
     """btrsynth-related extension of TuLiP automaton nodes.
 
     Adds support for transition selection based on memory contents.
+    See details below.
+
+    As in the class tulip.AutomatonState, each node here has a
+    transition attribute.  Each transition also has a corresponding
+    callable (or None) that makes it ``enabled'' or ``unenabled''
+    depending on the contents of memory.  These callables are
+    maintained in the attribute ``cond'', which is kept in order with
+    ``transition'' such that the k-th element of self.transition
+    corresponds to the k-th element of self.cond
+
+    If the entry in self.cond for a transition is None, then it is
+    automatically ``enabled''.  By default, all
+    transition-conditionals are set to None.
+
+    Let conf_func be an element of self.cond.  Then conf_func is
+    called as conf_func(memory), where ``memory'' is the contents of
+    the automaton finite memory.  conf_func should return True if the
+    edge is enabled, and False otherwise.
 
     Use BTAutomatonNode(tulip_autnode=node), where node is an instance
     of TuLiP AutomatonState class, to copy an existing object.
     """
     def __init__(self, id=-1, state={}, transition=[],
-                 tulip_autnode=None):
+                 rule=None, cond=[],
+                 tulip_autnode=None,):
         if tulip_autnode is not None:
             self.id = tulip_autnode.id
             self.state = copy.copy(tulip_autnode.state)
             self.transition = copy.copy(tulip_autnode.transition)
         else:
             tulip.automaton.AutomatonState.__init__(self, id, state, transition)
-        self.rule = None
-        self.cond = None
+        if not callable(rule):
+            self.rule = None
+        else:
+            self.rule = rule
+        if (cond is None) or len(cond) < len(self.transition):
+            self.cond = [None for k in self.transition]
+        else:
+            self.cond = copy.copy(cond)
 
     def copy(self):
         """Copy self."""
         return BTAutomatonNode(id=self.id,
                                state=copy.copy(self.state),
-                               transition=copy.copy(self.transition))
+                               transition=copy.copy(self.transition),
+                               rule=self.rule,
+                               cond=copy.copy(self.cond))
 
     def addNodeRule(self, rule):
         """If this node is reached during execution, then apply the rule.
@@ -44,8 +71,13 @@ class BTAutomatonNode(tulip.automaton.AutomatonState):
         parent object, an instance of class BTAutomaton,
         e.g. execNextAutState.
 
-        Called as rule(memory, prev_node_id, this_input), where
+        Called as rule(aut, memory, prev_node_id, node_id, this_input), where
+            - aut is the owning BTAutomaton instance,
+
             - memory is the finite memory of the automaton,
+
+            - node_id is the ID of the node from which this method is
+              being called,
 
             - prev_node_id is the ID of the node preceding this one in
               the current execution path,
@@ -71,34 +103,39 @@ class BTAutomatonNode(tulip.automaton.AutomatonState):
         else:
             return False
 
-    def addEdgeCondition(self, cond):
-        """If more than one transition takes an input (env state), call cond.
+    # def addEdgeCondition(self, cond):
+    #     """If more than one transition takes an input (env state), call cond.
 
-        Called as cond(memory, next_input), where
-            - memory is the finite memory of the automaton (a
-              dictionary; see notes for class BTAutomaton),
+    #     Called as cond(aut, memory, node_id, next_input), where
+    #         - aut is the owning BTAutomaton instance,
 
-            - next_input is the environment action x that leads to
-              more than one possible outward transition (hence,
-              conflict). It is a dictionary specifying states of
-              environment variables, e.g. as given in the arguments to
-              execNextAutState.
+    #         - memory is the finite memory of the automaton (a
+    #           dictionary; see notes for class BTAutomaton),
 
-        cond is then expected to return the appropriate transition (ID
-        of next node), or raise an exception on error.
+    #         - node_id is the ID of the node from which this method is
+    #           being called,
 
-        N.B., unlike a node ``rule'', a condition cannot be None
-        because the purpose of cond is to resolve a conflict (more
-        than one possible transition).
+    #         - next_input is the environment action x that leads to
+    #           more than one possible outward transition (hence,
+    #           conflict). It is a dictionary specifying states of
+    #           environment variables, e.g. as given in the arguments to
+    #           execNextAutState.
 
-        If given cond is not callable, then do not change current
-        condition routine, and return False. Else, return True.
-        """
-        if callable(cond):
-            self.cond = cond
-            return True
-        else:
-            return False
+    #     cond is then expected to return the appropriate transition (ID
+    #     of next node), or raise an exception on error.
+
+    #     N.B., unlike a node ``rule'', a condition cannot be None
+    #     because the purpose of cond is to resolve a conflict (more
+    #     than one possible transition).
+
+    #     If given cond is not callable, then do not change current
+    #     condition routine, and return False. Else, return True.
+    #     """
+    #     if callable(cond):
+    #         self.cond = cond
+    #         return True
+    #     else:
+    #         return False
 
 
 class BTAutomaton(tulip.automaton.Automaton):
@@ -117,8 +154,14 @@ class BTAutomaton(tulip.automaton.Automaton):
     findNextAutState, or peeking at the transition attribute of node
     instances), manipulations of memory or conditional transitioning
     is achieved using various access or triggering methods.  See
-    docstrings of relevant methods --here and for BTAutomatonNode--
+    docstrings of relevant methods --here and in BTAutomatonNode--
     for usage details.
+
+    To support conditionally taking an edge depending on memory
+    contents, all node transition lists in BTAutomaton objects are
+    coupled with transition-conditional lists, which contain callables
+    (or None) that determine whether the corresponding transition is
+    enabled. See doc for class BTAutomatonNode for details
 
     WARNING: a tutorial presentation of usage is missing, and much of
     the documentation assumes (significant) background knowledge, in
@@ -141,20 +184,36 @@ class BTAutomaton(tulip.automaton.Automaton):
 
     def recastBTAutNodes(self):
         """Cast any nodes of class tulip.AutomatonState into BTAutomatonNode.
+        
+        Catch discrepencies between transition and cond lengths. If
+        cond has length zero, fill it out with None. Else raise exception.
         """
         for k in range(len(self.states)):
             if not isinstance(self.states[k], BTAutomatonNode):
                 self.states[k] = BTAutomatonNode(tulip_autnode=self.states[k])
+            if len(self.states[k].cond) < len(self.states[k].transition):
+                if len(self.states[k].cond) == 0:
+                    self.states[k].cond = [None for i in self.states[k].transition]
+                else:
+                    raise ValueError("FATAL: mismatch between cond and transition lists.")
 
     def trimDeadStates(self):
-        """Tweak method from TuLiP Automaton to get BTAutomatonNode nodes.
-        """
-        tulip.automaton.Automaton.trimDeadStates(self)
-        self.recastBTAutNodes()
+        """Replace corresponding method from TuLiP Automaton."""
+        while True:
+            kill_list = []
+            for k in range(len(self.states)):
+                if len(self.states[k].transition) == 0:
+                    kill_list.append(k)
+            if len(kill_list) == 0:
+                break
+            for k in kill_list:
+                self.removeNode(self.states[k].id)
+        self.packIDs()
 
     def trimUnconnectedStates(self):
-        """Tweak method from TuLiP Automaton to get BTAutomatonNode nodes.
+        """Wrap method from TuLiP Automaton to get BTAutomatonNode nodes.
         """
+        raise Exception("METHOD NOT SUPPORTED")
         tulip.automaton.Automaton.trimUnconnectedStates(self)
         self.recastBTAutNodes()
 
@@ -187,7 +246,9 @@ class BTAutomaton(tulip.automaton.Automaton):
         if not match_flag:
             raise TypeError("given node ID not found in automaton.")
         for prev_node in self.getAutInSet(node_id):
+            prev_ind = prev_node.transition.index(node_id)
             prev_node.transition.remove(node_id)
+            del prev_node.cond[prev_ind]
         del self.states[ind]
 
     def packIDs(self):
@@ -204,6 +265,8 @@ class BTAutomaton(tulip.automaton.Automaton):
         # Now update transition lists
         for ind in range(len(self.states)):
             self.states[ind].transition = [ID_map[k] for k in self.states[ind].transition]
+        # N.B., since we've only change IDs, conditions (in self.cond)
+        # on transitions remain unchanged, hence self.conf is untouched.
 
     def removeFalseInits(self, S0):
         """Remove all nodes that look like init nodes but are not in S0.
@@ -299,7 +362,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         """Return a *copy* of automaton memory."""
         return copy.copy(self.memory)
 
-    def triggerRule(self, node_id, env_state):
+    def triggerRule(self, prev_node_id, node_id, env_state):
         """Call ``rule'' of a node. Return True on success, else raise exception.
         """
         node = self.getAutState(node_id)
@@ -309,27 +372,28 @@ class BTAutomaton(tulip.automaton.Automaton):
             raise Exception("node "+str(node_id)+" is not an instance of BTAutomatonNode")
         if node.rule is not None:
             try:
-                new_memory = node.rule(self.getMem(), node_id, env_state)
+                new_memory = node.rule(self, self.getMem(), prev_node_id,
+                                       node_id, env_state)
             except:
                 raise Exception("rule of node "+str(node_id)+" failed.")
             self.memory = new_memory
         return True
         
 
-    def addGroupCondition(self, ID_list, cond):
-        """Set edge condition to cond for all nodes in ID_list.
+    # def addGroupCondition(self, ID_list, cond):
+    #     """Set edge condition to cond for all nodes in ID_list.
 
-        On success return -1, on failure return first ID in ID_list
-        where error occurred.
+    #     On success return -1, on failure return first ID in ID_list
+    #     where error occurred.
 
-        N.B., changes are incremental, so on error some of the nodes
-        have already been updated!
-        """
-        for k in ID_list:
-            autnode = self.getAutState(k)
-            if (autnode is None) or (not autnode.addEdgeCondition(cond)):
-                return k
-        return -1
+    #     N.B., changes are incremental, so on error some of the nodes
+    #     have already been updated!
+    #     """
+    #     for k in ID_list:
+    #         autnode = self.getAutState(k)
+    #         if (autnode is None) or (not autnode.addEdgeCondition(cond)):
+    #             return k
+    #     return -1
 
     def addGroupRule(self, ID_list, rule):
         """Set node rules to ``rule'' for all nodes in ID_list.
@@ -363,7 +427,13 @@ class BTAutomaton(tulip.automaton.Automaton):
         tulip.automaton handles IDs and node references is sloppy,
         thus I tend to write ID-centric code when using
         tulip.automaton.
-        
+
+        QUIRK 1: to avoid halting, transition-conditionals are only
+        invoked if more than one transition is possible; i.e., an
+        ``unenabled'' edge could be taken if it otherwise has the
+        correct label (environment valuation) and is the only such
+        edge.
+
         If an error occurs (e.g. given node_id is invalid), raise
         exception indicating the failure, else return the ID of the
         next node.
@@ -372,10 +442,12 @@ class BTAutomaton(tulip.automaton.Automaton):
         if node == -1:
             raise Exception("Given node ID not recognized.")
         
-        transition = []
-        for cand_id in node.transition:
+        transition = []  # n.b., ID and index into node.transition
+        
+        for cand_ID_ind in range(len(node.transition)):
+            cand_ID = node.transition[cand_ID_ind]
             mismatch = False
-            cand_node = self.getAutState(cand_id)
+            cand_node = self.getAutState(cand_ID)
             for env_var in env_state.keys():
                 if not cand_node.state.has_key(env_var):
                     raise Exception("Given environment variable not recognized.")
@@ -383,17 +455,26 @@ class BTAutomaton(tulip.automaton.Automaton):
                     mismatch = True
                     break
             if not mismatch:
-                transition.append(cand_id)
+                transition.append((cand_ID, cand_ID_ind))
         if len(transition) == 0:
             raise Exception("Given environment state does not have a corresponding outgoing transition from node "+str(node_id))
         if len(transition) > 1:
             try:
-                next_id = node.cond(self.getMem(), env_state)
+                next_id = None
+                for trans_cand in transition:
+                    if ((node.cond[trans_cand[1]] is None)
+                        or node.cond[trans_cand[1]](self.getMem())):
+                        if next_id is not None:
+                            raise Exception("FATAL: transition conflict unresolved.")
+                        else:
+                            next_id = trans_cand[0]
+                if next_id is None:
+                    raise Exception("FATAL: execNextAutState led to halt!")
             except:
                 raise Exception("cond of node "+str(node_id)+" failed.")
         else:
-            next_id = transition[0]
-        self.triggerRule(next_id, env_state)
+            next_id = transition[0][0]
+        self.triggerRule(node_id, next_id, env_state)
         return next_id
 
 
