@@ -172,6 +172,63 @@ class BTAutomaton(tulip.automaton.Automaton):
         """
         self.addAutState(node)
 
+    def removeNode(self, node_id):
+        """Remove node with given ID and all dependent transitions.
+
+        Does *not* re-map IDs.
+
+        Raise exception on failure, else return nothing.
+        """
+        match_flag = False
+        for ind in range(len(self.states)):
+            if self.states[ind].id == node_id:
+                match_flag = True
+                break
+        if not match_flag:
+            raise TypeError("given node ID not found in automaton.")
+        for prev_node in self.getAutInSet(node_id):
+            prev_node.transition.remove(node_id)
+        del self.states[ind]
+
+    def packIDs(self):
+        """Change all node IDs to reflect position in self.states.
+
+        ...this is stupid and almost enough motivation to overhaul
+        TuLiP Automaton directly.
+        """
+        # Build ID map, old to new
+        ID_map = dict()
+        for ind in range(len(self.states)):
+            ID_map[self.states[ind].id] = ind
+            self.states[ind].id = ind
+        # Now update transition lists
+        for ind in range(len(self.states)):
+            self.states[ind].transition = [ID_map[k] for k in self.states[ind].transition]
+
+    def removeFalseInits(self, S0):
+        """Remove all nodes that look like init nodes but are not in S0.
+
+        S0 should be a list of nodes (not IDs!).
+
+        During patching, some nodes may become orphaned, etc. This
+        method keeps repeating removal of apparent ``init'' nodes that
+        do not appear in S0 until no such nodes are found.
+
+        Does *not* re-map IDs.
+
+        Raise exception on failure, else return nothing.
+        """
+        while True:
+            detected_S0 = self.getAutInit()
+            change_flag = False
+            for node in detected_S0:
+                if node in S0:
+                    continue
+                self.removeNode(node.id)
+                change_flag = True
+            if not change_flag:
+                break
+
     def importChildAut(self, aut):
         """Import given automaton into this automaton.
 

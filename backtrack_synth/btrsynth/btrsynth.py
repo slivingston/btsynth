@@ -721,7 +721,8 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
             
             # Set of nodes in M corresponding to abstract nbhd.
             Reg = aut.computeGridReg(nbhd=nbhd_inclusion, var_prefix=var_prefix)
-            Init = set([node.id for node in aut.getAutInit()]) & set(Reg)
+            S0 = aut.getAutInit()
+            Init = set([node.id for node in S0]) & set(Reg)
             Entry = aut.findEntry(Reg)
             Exit = aut.findExit(Reg)
             
@@ -796,21 +797,22 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
             if not match_flag:
                 raise Exception("FATAL")
             
+        # Delete blocked nodes and dependent edges
+        kill_list = []
+        for ind in range(len(aut.states)):
+            if extract_autcoord(aut.states[ind], var_prefix=var_prefix)[0] == intent:
+                kill_list.append(aut.states[ind].id)
+        for kill_id in kill_list:
+            aut.removeNode(kill_id)
+        aut.packIDs()
+        
+        # Pick-off invalid initial nodes
+        aut.removeFalseInits(S0)
+        aut.packIDs()
 
         #DEBUG
         aut.writeDotFileCoord(fname="tempsyn-FRAG.dot")
         exit(0)
-
-        # # Trim bad nodes from aut; note that we just delete ingoing
-        # # and outgoing edges from all nodes in S_block.  The result is
-        # # a set of ``floater'' nodes.
-        # for ind in range(len(S_Pre)):
-        #     for bad_ind in range(len(S_block)):
-        #         try:
-        #             S_Pre[ind].transition.remove(S_block[bad_ind].id)
-        #         except ValueError:
-        #             pass
-        #         S_block[bad_ind].transition = []
 
 
 def btsim_navobs(init, goal_list, aut, W_actual, num_obs,
