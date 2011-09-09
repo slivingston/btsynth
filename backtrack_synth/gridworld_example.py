@@ -37,6 +37,7 @@ if __name__ == "__main__":
     print "Resulting solution automaton M has %d nodes." % aut.size()
     aut.trimDeadStates()
     print "After trimming dead nodes, M has size %d" % aut.size()
+    aut.writeFile("tempsyn-ORIG.aut")
     aut.writeDotFileCoord(fname="tempsyn-ORIG.dot")
 
     # sim_history = grsim([aut], num_it=20, deterministic_env=False)
@@ -45,14 +46,15 @@ if __name__ == "__main__":
     #         + "; " + str(extract_autcoord(step[1], var_prefix="Y_0")[0])
 
     print "Actual world:"
-    print pretty_world(W_actual)
+    print pretty_world(W_actual, goal_list=goal_list, init_list=init_list,
+                       env_init_list=env_init_list)
 
     print "sim and patch..."
     (aut_patched, W_patched) = btsim_navobs(init_list[0], goal_list, aut, W_actual,
                                             env_init_list=env_init_list,
                                             num_steps=100)
     
-    aut_patched.writeDotFile(fname="tempsyn-PATCHED.dot", hideZeros=True)
+    aut_patched.writeDotFileCoord(fname="tempsyn-PATCHED.dot")
 
     history, intent, obs_poses = navobs_sim(init_list[0], aut_patched, W_actual,
                                             num_obs=num_obs, num_it=100)

@@ -269,6 +269,95 @@ class BTAutomaton(tulip.automaton.Automaton):
         # N.B., since we've only change IDs, conditions (in self.cond)
         # on transitions remain unchanged, hence self.conf is untouched.
 
+    def cleanDuplicateTrans(self):
+        """These duplicate transitions, i.e multiple entries in
+        transition attribute of a node with the same destination ID,
+        appear during the merging process.  Code could be added there
+        to deal with it, but I find this post-process nicer.
+        """
+        for node in self.states:
+            ref_transition = list(set(node.transition))
+            if len(ref_transition) == len(node.transition):
+                continue
+            for next_ID in ref_transition:
+                if node.transition.count(next_ID) > 1:
+                    indices = []
+                    for k in range(node.transition.count(next_ID)):
+                        if len(indices) == 0:
+                            indices.append(node.transition.index(next_ID))
+                        else:
+                            indices.append(node.transition.index(next_ID, indices[-1]+1))
+                    del indices[0]  # Save one copy!
+                    indices.reverse()
+                    for k in indices:
+                        del node.transition[k]
+                        del node.cond[k]
+
+
+    def fleshOutGridState(self, nominal_vars, special_var):
+        """for each node in which special_var is set, expand valuation
+        to include all missing variables from nominal_vars, and have
+        each one of these be true while satisfying mutex.
+
+        e.g., if node state has special_var (call it fooM) set (or
+        ``true'') and is missing 3 variables (call them foo1, foo2,
+        foo3) from nominal_vars, then expand this node into 4 new
+        nodes, each of these having precisely one of foo1, foo2, foo3,
+        fooM true. Also adjust all incoming edges to original node to
+        be the same for all 4 new nodes and make the outgoing edge
+        sets of all 4 new nodes the same (verbatim) as the original.
+
+        if node state does *not* have special_var set, but is still
+        missing some variables from nominal_vars, then they are added
+        and cleared.  No new nodes are created in that case.
+
+        This process is repeated for all nodes in the automaton.
+
+        N.B., original IDs will be lost! (obviously).
+        """
+        self.packIDs()
+        new_ID = -1
+        for node in self.states:
+            if node.id > new_ID:
+                new_ID = node.id
+        new_ID += 1  # max + 1; i.e., unique
+        num_orig = len(self.states)
+        for k in range(num_orig):
+            if not self.states[k].state.has_key(special_var):
+                raise Exception("FATAL: node "+str(self.states[k].id)+" is missing special_var, \""+special_var+"\"")
+            if self.states[k].state[special_var] == 0:
+                # Just expand any missing nominal vars
+                for nom_var in nominal_vars:
+                    if not self.states[k].state.has_key(nom_var):
+                        self.states[k].state[nom_var] = 0
+            else:
+                # Flesh out
+                missing_vars = []
+                for nom_var in nominal_vars:
+                    if not self.states[k].state.has_key(nom_var):
+                        missing_vars.append(nom_var)
+                if len(missing_vars) == 0:
+                    continue  # Vacuous case
+                # Fill out missing variables for this particular node
+                for miss_var in missing_vars:
+                    self.states[k].state[miss_var] = 0
+                new_nodes = []
+                # Generate new nodes, and append to Automaton
+                start_ID = new_ID
+                for j in range(len(missing_vars)):
+                    new_nodes.append(self.states[k].copy())
+                    new_nodes[-1].id = new_ID
+                    new_ID += 1
+                    new_nodes[-1].state[missing_vars[j]] = 1
+                    new_nodes[-1].state[special_var] = 0
+                self.states.extend(new_nodes)
+                for node in self.states:
+                    if self.states[k].id in node.transition:
+                        trans_ind = node.transition.index(self.states[k].id)
+                        node.transition.extend(range(start_ID, new_ID))
+                        node.cond.extend([node.cond[trans_ind] for j in range(start_ID, new_ID)])
+        self.packIDs()
+
     def removeFalseInits(self, S0):
         """Remove all nodes that look like init nodes but are not in S0.
 
@@ -475,19 +564,16 @@ class BTAutomaton(tulip.automaton.Automaton):
         if len(transition) == 0:
             raise Exception("Given environment state does not have a corresponding outgoing transition from node "+str(node_id))
         if len(transition) > 1:
-            try:
-                next_id = None
-                for trans_cand in transition:
-                    if ((node.cond[trans_cand[1]] is None)
-                        or node.cond[trans_cand[1]](self.getMem())):
-                        if next_id is not None:
-                            raise Exception("FATAL: transition conflict unresolved.")
-                        else:
-                            next_id = trans_cand[0]
-                if next_id is None:
-                    raise Exception("FATAL: execNextAutState led to halt!")
-            except:
-                raise Exception("cond of node "+str(node_id)+" failed.")
+            next_id = None
+            for trans_cand in transition:
+                if ((node.cond[trans_cand[1]] is None)
+                    or node.cond[trans_cand[1]](self.getMem())):
+                    if next_id is not None:
+                        raise Exception("FATAL: transition conflict unresolved.")
+                    else:
+                        next_id = trans_cand[0]
+            if next_id is None:
+                raise Exception("FATAL: execNextAutState led to halt!")
         else:
             next_id = transition[0][0]
         self.triggerRule(node_id, next_id, env_state)

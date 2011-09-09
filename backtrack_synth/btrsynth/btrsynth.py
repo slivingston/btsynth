@@ -1038,6 +1038,8 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             Init = set([node.id for node in S0]) & set(Reg)
             Entry = aut.findEntry(Reg)
             Exit = aut.findExit(Reg)
+            if len(Exit) == 0:
+                raise Exception("FATAL: reduced to original problem, i.e. S = Reg.")
             
             W_patch, offset = subworld(W_actual, nbhd_inclusion)
             # Shift coordinates to be w.r.t. W_patch
@@ -1079,6 +1081,12 @@ def btsim_navobs(init, goal_list, aut, W_actual,
 
         # Merge (in several steps)
 
+        # Trim dead nodes in patch automata
+        # for aut_ind in range(len(patch_auts)):
+        #     print "BEFORE: "+str(patch_auts[aut_ind][0].size())
+        #     patch_auts[aut_ind][0].trimDeadStates()
+        #     print "AFTER: "+str(patch_auts[aut_ind][0].size())
+
         # Set rule to clearing mem cells for nodes in the original M
         for node in aut.states:
             node.addNodeRule(rule_clearall)
@@ -1087,15 +1095,30 @@ def btsim_navobs(init, goal_list, aut, W_actual,
         # and expand set of variables of the patch to include all
         # those of the (original) global problem.
         patch_id_maps = []
-        full_state = aut.states[0].state.keys()  # Pick out full variable list
+        env_vars_list = []
+        env_nowhere_vars = []
+        for obs in range(num_obs):
+            # Pick out full list of env variables, for each obstacle
+            env_vars_list.append(prefix_filt(aut.states[0].state,
+                                             prefix=env_prefix+"_"+str(obs)))
+            env_vars_list[-1] = env_vars_list[-1].keys()
+            env_nowhere_vars.append(env_prefix+"_"+str(obs)+"_n_n")
+        # Pick out full list of sys variables
+        sys_vars = prefix_filt(aut.states[0].state, prefix=var_prefix)  
         for aut_ind in range(len(patch_auts)):
             Ml = patch_auts[aut_ind][0]
+            for obs in range(num_obs):
+                Ml.fleshOutGridState(env_vars_list[obs],
+                                     special_var=env_nowhere_vars[obs])
             for node in Ml.states:
-                prev_keys = node.state.keys()
+                # This approach is not general, in that we assume
+                # *all* system variables pertain to position in the abstract space (i.e. Z/P).
                 (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
-                node.state = dict([(k, 0) for k in full_state])
+                for sys_var in sys_vars:
+                    node.state[sys_var] = 0
                 node.state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
                 node.addNodeRule(rule_setmatch)
+                node.cond = [cond_anynot for k in range(len(node.transition))]
             patch_id_maps.append(aut.importChildAut(Ml))
 
         # Undo offset of the part of sys goal list addressed in patch
@@ -1108,6 +1131,7 @@ def btsim_navobs(init, goal_list, aut, W_actual,
 
         # Attach entry and exit points
         for aut_ind in range(len(patch_auts)):
+            #import pdb; pdb.set_trace() #DEBUG
             l = patch_auts[aut_ind][1]
             Ml = patch_auts[aut_ind][0]
             local_goals_IDs = patch_auts[aut_ind][2]
@@ -1116,9 +1140,17 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             match_list = Ml.findAllAutPartState(sys_state)
             if len(match_list) == 0:
                 raise Exception("FATAL")
-            # Shortcut, given we are only addressing deterministic
-            # (non-adversarial) problem in this example.
-            entry_node.transition = [patch_id_maps[aut_ind][match_list[0].transition[0]]]
+            for match in match_list:
+                for k in range(len(entry_node.transition)):
+                    next_node = aut.getAutState(entry_node.transition[k])
+                    env_state = prefix_filt(next_node.state, prefix=env_prefix)
+                    # Find environment (outward edge) labels that are consistent.
+                    # Note that multiple matches leads to multiple overwrites, silently!
+                    for j in range(len(match.transition)):
+                        match_next = Ml.getAutState(match.transition[j])
+                        if set(env_state.items()).issubset(set(match_next.state.items())):
+                            entry_node.transition[k] = patch_id_maps[aut_ind][match.transition[j]]
+                            entry_node.cond[k] = None
 
             match_flag = False
             for local_goal_ID in local_goals_IDs:
@@ -1129,7 +1161,6 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                     match_flag = True
                 for match_node in match_list:
                     if len(aut.getMem()) > 0:
-                        aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond = [cond_anynot for k in aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition]
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond.extend([cond_all for k in goal_node.cond])
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition.extend(goal_node.transition)
                     else:
@@ -1150,9 +1181,10 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             aut.removeNode(kill_id)
         aut.packIDs()
         
-        # Pick-off invalid initial nodes
+        # Pick-off invalid initial nodes, and other clean-up
         aut.removeFalseInits(S0)
         aut.packIDs()
+        aut.cleanDuplicateTrans()
 
 
 def subworld(W, subregion):
