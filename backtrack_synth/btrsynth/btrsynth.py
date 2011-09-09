@@ -131,13 +131,22 @@ def read_worldf(fname):
             wstr_list.append(line)
     return read_world("\n".join(wstr_list))
 
-def image_world(W, goal_list=[], init_list=[], env_init_list=[]):
+def image_world(W, goal_list=[], init_list=[], env_init_list=[],
+                show_grid=False, grid_width=2):
     """Like pretty_world, but now generate and show a matplotlib image.
     """
     W = W.copy()
-    W = ones(shape=W.shape) - W
-    plt.imshow(W, cmap.gray, aspect="equal", interpolation="nearest")
-    plt.show()
+    W = np.ones(shape=W.shape) - W
+    plt.imshow(W, cmap=mplt_cm.gray, aspect="equal", interpolation="nearest")
+    if show_grid:
+        xmin, xmax, ymin, ymax = plt.axis()
+        x_steps = np.linspace(xmin, xmax, W.shape[1]+1)
+        y_steps = np.linspace(ymin, ymax, W.shape[0]+1)
+        for k in x_steps:
+            plt.plot([k, k], [ymin, ymax], 'k-', linewidth=grid_width)
+        for k in y_steps:
+            plt.plot([xmin, xmax], [k, k], 'k-', linewidth=grid_width)
+        plt.axis([xmin, xmax, ymin, ymax])
 
 def pretty_world(W, goal_list=[], init_list=[], env_init_list=[],
                  simresult=None,
