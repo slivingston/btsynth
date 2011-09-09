@@ -104,40 +104,6 @@ class BTAutomatonNode(tulip.automaton.AutomatonState):
         else:
             return False
 
-    # def addEdgeCondition(self, cond):
-    #     """If more than one transition takes an input (env state), call cond.
-
-    #     Called as cond(aut, memory, node_id, next_input), where
-    #         - aut is the owning BTAutomaton instance,
-
-    #         - memory is the finite memory of the automaton (a
-    #           dictionary; see notes for class BTAutomaton),
-
-    #         - node_id is the ID of the node from which this method is
-    #           being called,
-
-    #         - next_input is the environment action x that leads to
-    #           more than one possible outward transition (hence,
-    #           conflict). It is a dictionary specifying states of
-    #           environment variables, e.g. as given in the arguments to
-    #           execNextAutState.
-
-    #     cond is then expected to return the appropriate transition (ID
-    #     of next node), or raise an exception on error.
-
-    #     N.B., unlike a node ``rule'', a condition cannot be None
-    #     because the purpose of cond is to resolve a conflict (more
-    #     than one possible transition).
-
-    #     If given cond is not callable, then do not change current
-    #     condition routine, and return False. Else, return True.
-    #     """
-    #     if callable(cond):
-    #         self.cond = cond
-    #         return True
-    #     else:
-    #         return False
-
 
 class BTAutomaton(tulip.automaton.Automaton):
     """btrsynth-related extension of TuLiP Automaton.
@@ -465,25 +431,10 @@ class BTAutomaton(tulip.automaton.Automaton):
                 new_memory = node.rule(self, self.getMem(), prev_node_id,
                                        node_id, env_state)
             except:
-                raise Exception("rule of node "+str(node_id)+" failed.")
+                print "ERROR: rule of node "+str(node_id)+" failed."
+                raise
             self.memory = new_memory
         return True
-        
-
-    # def addGroupCondition(self, ID_list, cond):
-    #     """Set edge condition to cond for all nodes in ID_list.
-
-    #     On success return -1, on failure return first ID in ID_list
-    #     where error occurred.
-
-    #     N.B., changes are incremental, so on error some of the nodes
-    #     have already been updated!
-    #     """
-    #     for k in ID_list:
-    #         autnode = self.getAutState(k)
-    #         if (autnode is None) or (not autnode.addEdgeCondition(cond)):
-    #             return k
-    #     return -1
 
     def addGroupRule(self, ID_list, rule):
         """Set node rules to ``rule'' for all nodes in ID_list.

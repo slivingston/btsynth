@@ -14,8 +14,8 @@ from btrsynth.automaton import BTAutomaton
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print "Usage: %s FILE-NOM FILE-REAL" % sys.argv[0]
+    if len(sys.argv) != 3 and len(sys.argv) != 4:
+        print "Usage: %s FILE-NOM FILE-REAL [nominal-solution]" % sys.argv[0]
         exit(1)
 
     # Parameters
@@ -28,17 +28,26 @@ if __name__ == "__main__":
     print "Nominal world:"
     print pretty_world(W, goal_list=goal_list, init_list=init_list,
                        env_init_list=env_init_list)
-    print "Trying to solve..."
-    aut = gen_navobs_soln(init_list=init_list,
-                          goal_list=goal_list,
-                          W=W, num_obs=len(env_init_list),
-                          env_init_list=env_init_list,
-                          restrict_radius=1)
-    print "Resulting solution automaton M has %d nodes." % aut.size()
-    aut.trimDeadStates()
-    print "After trimming dead nodes, M has size %d" % aut.size()
-    aut.writeFile("tempsyn-ORIG.aut")
-    aut.writeDotFileCoord(fname="tempsyn-ORIG.dot")
+
+    if len(sys.argv) >= 4:
+        aut = BTAutomaton(sys.argv[3])
+        print "Loaded (nominal) solution automaton M has %d nodes." % aut.size()
+        # aut.trimDeadStates()
+        # print "After trimming dead nodes, M has size %d" % aut.size()
+        aut.writeDotFileCoord("tempsyn-ORIG.dot")
+
+    else:
+        print "Trying to solve..."
+        aut = gen_navobs_soln(init_list=init_list,
+                              goal_list=goal_list,
+                              W=W, num_obs=len(env_init_list),
+                              env_init_list=env_init_list,
+                              restrict_radius=1)
+        print "Resulting solution automaton M has %d nodes." % aut.size()
+        aut.trimDeadStates()
+        print "After trimming dead nodes, M has size %d" % aut.size()
+        aut.writeFile("tempsyn-ORIG.aut")
+        aut.writeDotFileCoord("tempsyn-ORIG.dot")
 
     # sim_history = grsim([aut], num_it=20, deterministic_env=False)
     # for step in sim_history:
@@ -53,11 +62,10 @@ if __name__ == "__main__":
     (aut_patched, W_patched) = btsim_navobs(init_list[0], goal_list, aut, W_actual,
                                             env_init_list=env_init_list,
                                             num_steps=100)
-    
-    aut_patched.writeDotFileCoord(fname="tempsyn-PATCHED.dot")
+    aut_patched.writeDotFileCoord("tempsyn-PATCHED.dot")
 
     history, intent, obs_poses = navobs_sim(init_list[0], aut_patched, W_actual,
-                                            num_obs=num_obs, num_it=100)
+                                            num_obs=num_obs, num_it=300)
     print intent
     print pretty_world(W_actual, goal_list=goal_list, init_list=init_list,
                        env_init_list=env_init_list,

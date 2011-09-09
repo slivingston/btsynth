@@ -16,7 +16,8 @@ if __name__ == "__main__":
     for k in range(len(sys.argv)-1):
         (W, goal_list, init_list, env_init_list) = read_worldf(sys.argv[k+1])
         print sys.argv[k+1]
-        print pretty_world(W=W, goal_list=goal_list, init_list=init_list,
-                           env_init_list=env_init_list,
-                           show_grid=True)
+        # print pretty_world(W=W, goal_list=goal_list, init_list=init_list,
+        #                    env_init_list=env_init_list,
+        #                    show_grid=True)
+        image_world(W, goal_list, init_list, env_init_list)
         print "#"*60+"\n"

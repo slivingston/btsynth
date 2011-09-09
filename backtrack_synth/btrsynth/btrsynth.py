@@ -6,6 +6,8 @@ SCL; 2011 Aug, Sep, draft
 from automaton import BTAutomaton
 
 import itertools
+import matplotlib.pyplot as plt
+import matplotlib.cm as mplt_cm
 import numpy as np
 import tulip.grgameint
 
@@ -128,6 +130,14 @@ def read_worldf(fname):
         for line in f:
             wstr_list.append(line)
     return read_world("\n".join(wstr_list))
+
+def image_world(W, goal_list=[], init_list=[], env_init_list=[]):
+    """Like pretty_world, but now generate and show a matplotlib image.
+    """
+    W = W.copy()
+    W = ones(shape=W.shape) - W
+    plt.imshow(W, cmap.gray, aspect="equal", interpolation="nearest")
+    plt.show()
 
 def pretty_world(W, goal_list=[], init_list=[], env_init_list=[],
                  simresult=None,
@@ -771,6 +781,7 @@ def cond_all(memory):
 
 def rule_clearall(aut, memory, prev_node_id, node_id, this_input):
     """Clear all memory values, regardless."""
+    print "DEBUG: automaton memory cleared by node "+str(node_id)
     return dict([(k, 0) for k in memory.keys()])
 
 def rule_setmatch(aut, memory, prev_node_id, node_id, this_input):
@@ -790,6 +801,7 @@ def rule_setmatch(aut, memory, prev_node_id, node_id, this_input):
         raise Exception("FATAL: rule called with invalid node ID.")
     for k in memory.keys():
         if node.state.has_key(k) and node.state[k] != 0:
+            print "DEBUG: automaton memory \""+str(k)+"\" set by node "+str(node_id)
             memory[k] = 1
     return memory
 
@@ -1131,7 +1143,6 @@ def btsim_navobs(init, goal_list, aut, W_actual,
 
         # Attach entry and exit points
         for aut_ind in range(len(patch_auts)):
-            #import pdb; pdb.set_trace() #DEBUG
             l = patch_auts[aut_ind][1]
             Ml = patch_auts[aut_ind][0]
             local_goals_IDs = patch_auts[aut_ind][2]
