@@ -31,4 +31,5 @@ if __name__ == "__main__":
             image_world(W, goal_list, init_list, env_init_list,
                         show_grid=False)
             plt.title(sys.argv[k+1])
-    plt.show()
+    if show_images:
+        plt.show()
