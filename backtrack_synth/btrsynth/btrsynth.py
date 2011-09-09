@@ -3,7 +3,7 @@
 SCL; 2011 Aug, Sep, draft
 """
 
-from automaton import BTAutomaton
+from automaton import BTAutomaton, BTAutomatonNode
 
 import itertools
 import matplotlib.pyplot as plt
@@ -14,6 +14,73 @@ import tulip.grgameint
 
 def errmsg(m):
     print "ERROR: "+m
+
+
+def create_nominal(W, env_init_list, soln_str, var_prefix="Y", env_prefix="X"):
+    """Create nominal automaton.
+
+    Generate nominal controller assuming environment can move, but not
+    anywhere that inteferes with nominal path.
+
+    nominal path should be sequence of coordinates, beginning with an
+    initial position all the way through loop closure. The point not
+    at the end of the path that should be attached to it has line
+    ending with "*". e.g.,
+
+    0 0
+    0 1
+    0 2
+    0 3 *
+    1 3
+    2 3
+    1 3
+    0 3
+   
+    soln_str should contain the above path data. N.B., end-of-line
+    delimiter should be '\n'.
+    
+    Return instance of btrsynth.BTAutomaton
+    """
+    # Parse nominal path string
+    nom_path = []
+    loop_marker = None
+    line_counter = -1
+    for line in soln_str.split("\n"):
+        line_counter += 1
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        if len(parts) > 2:
+            loop_marker = len(nom_path)
+        try:
+            nom_path.append((int(parts[0]), int(parts[1])))
+        except ValueError:
+            print "ERROR: malformed line in nominal path data, at line "+str(line_counter)
+            print line
+            exit(-1)  # Be aggressive; force quit
+    if loop_marker is None:
+        print "ERROR: no loop closure marker found in nominal path data."
+        exit(-1)  # Be aggressive; force quit
+
+    # Build list of system variables
+    pos_indices = [k for k in itertools.product(range(W.shape[0]), range(W.shape[1]))]
+    sys_vars = []
+    for k in pos_indices:
+        sys_vars.append(var_prefix+"_"+str(k[0])+"_"+str(k[1]))
+    sys_vars_nowhere = dict([(var, 0) for var in sys_vars])
+    
+    aut = BTAutomaton()
+    last_id = 0
+    for step in nom_path:
+        node = BTAutomatonNode(id=last_id,
+                               state=sys_vars_nowhere.copy(),
+                               transition=[last_id+1])
+        node.state[var_prefix+"_"+str(step[0])+"_"+str(step[1])] = 1
+        aut.states.append(node)
+        last_id += 1
+    aut.states[-1].transition = [loop_marker]
+    return aut
+
 
 def read_world(world_str):
     """Process string as World, return matrix, and goal, init lists for sys and env.
@@ -1059,7 +1126,7 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             Init = set([node.id for node in S0]) & set(Reg)
             Entry = aut.findEntry(Reg)
             Exit = aut.findExit(Reg)
-            if len(Exit) == 0:
+            if len(Reg) == aut.size():
                 raise Exception("FATAL: reduced to original problem, i.e. S = Reg.")
             
             W_patch, offset = subworld(W_actual, nbhd_inclusion)
