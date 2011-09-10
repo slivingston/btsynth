@@ -28,6 +28,7 @@ if __name__ == "__main__":
             nomstr_list.append(line)
     aut = create_nominal(W=W, env_init_list=env_init_list,
                          soln_str="\n".join(nomstr_list))
+    print "number of states:", aut.size()
     aut.writeFile("tempnom.aut")
     if obnoxious_flag:
         aut.writeDotFile("tempnom.dot")

@@ -16,7 +16,8 @@ def errmsg(m):
     print "ERROR: "+m
 
 
-def create_nominal(W, env_init_list, soln_str, var_prefix="Y", env_prefix="X"):
+def create_nominal(W, env_init_list, soln_str, restrict_radius=1,
+                   var_prefix="Y", env_prefix="X"):
     """Create nominal automaton.
 
     Generate nominal controller assuming environment can move, but not
@@ -68,7 +69,8 @@ def create_nominal(W, env_init_list, soln_str, var_prefix="Y", env_prefix="X"):
     for k in pos_indices:
         sys_vars.append(var_prefix+"_"+str(k[0])+"_"+str(k[1]))
     sys_vars_nowhere = dict([(var, 0) for var in sys_vars])
-    
+
+    # Build node without environment
     aut = BTAutomaton()
     last_id = 0
     for step in nom_path:
@@ -79,6 +81,30 @@ def create_nominal(W, env_init_list, soln_str, var_prefix="Y", env_prefix="X"):
         aut.states.append(node)
         last_id += 1
     aut.states[-1].transition = [loop_marker]
+
+    # Augment for all environment variables
+    for env_ind in range(len(env_init_list)):
+        env_center = env_init_list[env_ind]
+        env_vars = []
+        nowhere_present = False
+        for i in range(env_center[0]-restrict_radius, env_center[0]+restrict_radius+1):
+            for j in range(env_center[1]-restrict_radius, env_center[1]+restrict_radius+1):
+                if i < 0 or j < 0 or i > W.shape[0]-1 or j > W.shape[1]-1:
+                    nowhere_present = True
+                else:
+                    env_vars.append(env_prefix+"_"+str(env_ind)+"_"+str(i)+"_"+str(j))
+        if nowhere_present:
+            for node in aut.states:
+                node.state[env_prefix+"_"+str(env_ind)+"_n_n"] = 1
+            env_vars.append(env_prefix+"_"+str(env_ind)+"_n_n")
+            aut.fleshOutGridState(nominal_vars=env_vars,
+                                  special_var=env_prefix+"_"+str(env_ind)+"_n_n")
+        else:
+            for node in aut.states:
+                node.state[env_vars[0]] = 1
+            aut.fleshOutGridState(nominal_vars=env_vars,
+                                  special_var=env_vars[0])
+
     return aut
 
 
