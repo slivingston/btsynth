@@ -6,10 +6,16 @@ SCL; 2011 Aug, Sep, draft
 from automaton import BTAutomaton, BTAutomatonNode
 
 import itertools
-import matplotlib.pyplot as plt
-import matplotlib.cm as mplt_cm
 import numpy as np
 import tulip.grgameint
+
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.cm as mplt_cm
+except ImportError:
+    print "WARNING: matplotlib unavailable."
+    plt = None
+    mplt_cm = None
 
 
 def errmsg(m):
@@ -228,6 +234,8 @@ def image_world(W, goal_list=[], init_list=[], env_init_list=[],
                 show_grid=False, grid_width=2):
     """Like pretty_world, but now generate and show a matplotlib image.
     """
+    if plt is None:
+        raise Exception("matplotlib missing; image-drawing routines are unavailable.")
     W = W.copy()
     W = np.ones(shape=W.shape) - W
     plt.imshow(W, cmap=mplt_cm.gray, aspect="equal", interpolation="nearest")

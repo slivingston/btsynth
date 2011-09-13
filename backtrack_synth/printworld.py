@@ -5,10 +5,14 @@ Print ``pretty'' diagrams, given world files.
 SCL; 2011 Aug 26
 """
 
-import matplotlib.pyplot as plt
 import sys
 from btrsynth import pretty_world, read_worldf, image_world
 
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    print "WARNING: matplotlib unavailable."
+    plt = None
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -16,6 +20,8 @@ if __name__ == "__main__":
         exit(1)
     show_images = False
     if "-i" in sys.argv:
+        if plt is None:
+            raise Exception("matplotlib missing; image-drawing routines are unavailable.")
         show_images = True
         sys.argv.remove("-i")
     for k in range(len(sys.argv)-1):
@@ -26,10 +32,10 @@ if __name__ == "__main__":
                                env_init_list=env_init_list,
                                show_grid=True)
             print "#"*60+"\n"
-        else:
+        elif plt is not None:
             plt.figure()
             image_world(W, goal_list, init_list, env_init_list,
                         show_grid=False)
             plt.title(sys.argv[k+1])
-    if show_images:
+    if show_images and plt is not None:
         plt.show()
