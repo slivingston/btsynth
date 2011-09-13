@@ -6,7 +6,7 @@ SCL; 2011 Aug, Sep draft
 """
 
 import tulip
-#from tulip.grsim import grsim
+import tulip.congexf as cg
 import sys
 
 from btrsynth.btrsynth import *
@@ -34,7 +34,6 @@ if __name__ == "__main__":
         print "Loaded (nominal) solution automaton M has %d nodes." % aut.size()
         # aut.trimDeadStates()
         # print "After trimming dead nodes, M has size %d" % aut.size()
-        aut.writeDotFileCoord("tempsyn-ORIG.dot")
 
     else:
         print "Trying to solve..."
@@ -46,8 +45,11 @@ if __name__ == "__main__":
         print "Resulting solution automaton M has %d nodes." % aut.size()
         aut.trimDeadStates()
         print "After trimming dead nodes, M has size %d" % aut.size()
-        aut.writeFile("tempsyn-ORIG.aut")
-        aut.writeDotFileCoord("tempsyn-ORIG.dot")
+
+    
+    aut.writeDotFileCoord("tempsyn-ORIG.dot")
+    with open("tempsyn-ORIG.gexf", "w") as f:
+        f.write(cg.dumpGexf(aut, use_viz=True, use_clusters=True))
 
     # sim_history = grsim([aut], num_it=20, deterministic_env=False)
     # for step in sim_history:
@@ -63,6 +65,9 @@ if __name__ == "__main__":
                                             env_init_list=env_init_list,
                                             num_steps=100)
     aut_patched.writeDotFileCoord("tempsyn-PATCHED.dot")
+    with open("tempsyn-PATCHED.gexf", "w") as f:
+        f.write(cg.dumpGexf(aut_patched, use_viz=True, use_clusters=True))
+    print "Size after patching (in nodes):", aut_patched.size()
 
     history, intent, obs_poses = navobs_sim(init_list[0], aut_patched, W_actual,
                                             num_obs=num_obs, num_it=300)

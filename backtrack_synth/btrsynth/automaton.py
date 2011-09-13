@@ -35,12 +35,17 @@ class BTAutomatonNode(tulip.automaton.AutomatonState):
     the automaton finite memory.  conf_func should return True if the
     edge is enabled, and False otherwise.
 
+    The ``tags'' attribute is used to associate extra data to the
+    node, such as coloring or size to use when visualizing the
+    automaton. If not used, tags is None; otherwise tags is a
+    dictionary.
+
     Use BTAutomatonNode(tulip_autnode=node), where node is an instance
     of TuLiP AutomatonState class, to copy an existing object.
     """
     def __init__(self, id=-1, state={}, transition=[],
                  rule=None, cond=[],
-                 tulip_autnode=None,):
+                 tulip_autnode=None, tags=None):
         if tulip_autnode is not None:
             self.id = tulip_autnode.id
             self.state = copy.copy(tulip_autnode.state)
@@ -55,6 +60,7 @@ class BTAutomatonNode(tulip.automaton.AutomatonState):
             self.cond = [None for k in self.transition]
         else:
             self.cond = copy.copy(cond)
+        self.tags = copy.copy(tags)
 
     def copy(self):
         """Copy self."""
@@ -163,6 +169,11 @@ class BTAutomaton(tulip.automaton.Automaton):
                     self.states[k].cond = [None for i in self.states[k].transition]
                 else:
                     raise ValueError("FATAL: mismatch between cond and transition lists.")
+
+    def allTag(self, tags):
+        """Apply a copy of given tags to all member nodes."""
+        for k in range(len(self.states)):
+            self.states[k].tags = copy.copy(tags)
 
     def trimDeadStates(self):
         """Replace corresponding method from TuLiP Automaton."""
@@ -348,12 +359,15 @@ class BTAutomaton(tulip.automaton.Automaton):
             if not change_flag:
                 break
 
-    def importChildAut(self, aut):
+    def importChildAut(self, aut, tags=None):
         """Import given automaton into this automaton.
 
         Specifically, add (copy) every node in aut, giving it a
         new unique ID to avoid conflicts, and adjust all transitions
         accordingly.
+
+        During import, all nodes originating from given aut object are
+        marked with ``tags''. Default is None (no tag).
 
         Return the ID map, showing how IDs in given automaton map into
         this one. Raise exception on error.
@@ -375,6 +389,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         for aut_node in aut.states:
             new_node_id += 1
             node = aut_node.copy()
+            node.tags = copy.copy(tags)
             node.id = new_node_id
             id_map[aut_node.id] = new_node_id
             self.addAutNode(node)
@@ -732,7 +747,6 @@ class BTAutomaton(tulip.automaton.Automaton):
                             agent_name = agent_candidate
                             break
                     if agent_name is None:
-                        import pdb; pdb.set_trace()
                         print "WARNING: variable \""+k+"\" does not belong to an agent in distinguishedTurns"
                         return False
 

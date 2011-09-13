@@ -6,6 +6,7 @@ SCL; 2011 Aug, Sep, draft
 from automaton import BTAutomaton, BTAutomatonNode
 
 import itertools
+from random import randint
 import numpy as np
 import tulip.grgameint
 
@@ -1203,12 +1204,6 @@ def btsim_navobs(init, goal_list, aut, W_actual,
 
         # Merge (in several steps)
 
-        # Trim dead nodes in patch automata
-        # for aut_ind in range(len(patch_auts)):
-        #     print "BEFORE: "+str(patch_auts[aut_ind][0].size())
-        #     patch_auts[aut_ind][0].trimDeadStates()
-        #     print "AFTER: "+str(patch_auts[aut_ind][0].size())
-
         # Set rule to clearing mem cells for nodes in the original M
         for node in aut.states:
             node.addNodeRule(rule_clearall)
@@ -1234,14 +1229,17 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                                      special_var=env_nowhere_vars[obs])
             for node in Ml.states:
                 # This approach is not general, in that we assume
-                # *all* system variables pertain to position in the abstract space (i.e. Z/P).
+                # *all* system variables pertain to position in the
+                # abstract space (i.e. Z/P).
                 (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
                 for sys_var in sys_vars:
                     node.state[sys_var] = 0
                 node.state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
                 node.addNodeRule(rule_setmatch)
                 node.cond = [cond_anynot for k in range(len(node.transition))]
-            patch_id_maps.append(aut.importChildAut(Ml))
+            patch_id_maps.append(aut.importChildAut(Ml,
+                                                    tags={"color": (randint(0,255), randint(0,255), randint(0,255), 0.5),
+                                                          "cluster_id": aut_ind}))
 
         # Undo offset of the part of sys goal list addressed in patch
         for k in range(len(patch_goal_list)):
