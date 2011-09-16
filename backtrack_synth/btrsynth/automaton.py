@@ -313,19 +313,17 @@ class BTAutomaton(tulip.automaton.Automaton):
                 for nom_var in nominal_vars:
                     if not self.states[k].state.has_key(nom_var):
                         missing_vars.append(nom_var)
+                        self.states[k].state[nom_var] = 0
                 if len(missing_vars) == 0:
                     continue  # Vacuous case
-                # Fill out missing variables for this particular node
-                for miss_var in missing_vars:
-                    self.states[k].state[miss_var] = 0
                 new_nodes = []
                 # Generate new nodes, and append to Automaton
                 start_ID = new_ID
-                for j in range(len(missing_vars)):
+                for miss_var in missing_vars:
                     new_nodes.append(self.states[k].copy())
                     new_nodes[-1].id = new_ID
                     new_ID += 1
-                    new_nodes[-1].state[missing_vars[j]] = 1
+                    new_nodes[-1].state[miss_var] = 1
                     new_nodes[-1].state[special_var] = 0
                 self.states.extend(new_nodes)
                 for node in self.states:

@@ -6,6 +6,7 @@ SCL; 2011 Aug, Sep, draft
 from automaton import BTAutomaton, BTAutomatonNode
 
 import itertools
+import copy
 from random import randint
 import numpy as np
 import tulip.grgameint
@@ -501,7 +502,7 @@ def LTL_world(W, var_prefix="obs",
 
 
 def gen_navobs_soln(init_list, goal_list, W, num_obs,
-                    env_init_list,
+                    env_init_list, env_goal_list=None,
                     goals_disjunct=None,
                     restrict_radius=1,
                     var_prefix="Y", env_prefix="X",
@@ -517,6 +518,12 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
     env_init_list is the center position for each (env-controlled)
     obstacle. Thus it must be that len(env_init_list) = num_obs
 
+    If env_goal_list is None (default), then regard the obstacle
+    initial positions as their goal positions.
+
+    N.B., we do not verify that env_goals are within restrict_radius
+    of initial env obstacle positions.
+
     restrict_radius determines the domains of obstacles; cf. notes in
     function LTL_world.
 
@@ -526,6 +533,10 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
     # Argument error checking
     if (len(init_list) == 0) or (num_obs < 0):
         return None
+
+    # Handle default env obstacle goal case
+    if env_goal_list is None:
+        env_goal_list = env_init_list
 
     # Handle degenerate case of no obstacles (thus, deterministic problem).
     if num_obs < 1:
@@ -538,7 +549,7 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
     obs_bounds = []
     env_str = []
     for k in range(num_obs):
-        center_loc = env_init_list[k]
+        center_loc = env_goal_list[k]
         row_low = center_loc[0]-restrict_radius
         nowhere = [False,  # corresponds to row_low
                    False,  # row_high
@@ -565,17 +576,32 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
                                  center_loc=center_loc,
                                  restrict_radius=restrict_radius))
 
+    # Environment progress: always eventually obstacle returns to
+    # initial position.
+    env_goal_str = []
+    for k in range(num_obs):
+        center_loc = env_goal_list[k]
+        if (center_loc[0] >= 0 and center_loc[0] <= W.shape[0]-1
+            and center_loc[1] >= 0 and center_loc[1] <= W.shape[1]-1):
+            env_goal_str.append("[]<>(e."+env_prefix+"_"+str(k)+"_"+str(center_loc[0])+"_"+str(center_loc[1])+")")
+        else:
+            env_goal_str.append("[]<>(e."+env_prefix+"_"+str(k)+"_n_n)")
+    if len(env_goal_str) == 0:
+        env_goal_str = ""
+    else:
+        env_goal_str = " & ".join(env_goal_str) + " &\n"
+
     env_init_str = ""
     if (env_init_list is not None) and len(env_init_list) > 0:
-        for loc in env_init_list:
-            for obs_ind in range(num_obs):
-                if len(env_init_str) > 0:
-                    env_init_str += " | "
-                if (loc[0] < row_low or loc[0] > row_high
-                    or loc[1] < col_low or loc[1] > col_high):
-                    env_init_str += "(" + "e."+env_prefix+"_"+str(obs_ind)+"_n_n)"
-                else:
-                    env_init_str += "(" + "e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+        for obs_ind in range(num_obs):
+            loc = env_init_list[obs_ind]
+            if len(env_init_str) > 0:
+                env_init_str += " | "
+            if (loc[0] < row_low or loc[0] > row_high
+                or loc[1] < col_low or loc[1] > col_high):
+                env_init_str += "(" + "e."+env_prefix+"_"+str(obs_ind)+"_n_n)"
+            else:
+                env_init_str += "(" + "e."+env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
     
     ########################################
     # Sys prep
@@ -650,6 +676,7 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
         f.write("LTLSPEC\n")
         if len(env_init_str) > 0:
             f.write("("+env_init_str+") & \n")
+        f.write(env_goal_str)
         first_obs_flag = True
         for k in range(num_obs):
             if first_obs_flag:
@@ -1110,6 +1137,8 @@ def btsim_navobs(init, goal_list, aut, W_actual,
     """
     if num_obs is None:
         num_obs = len(env_init_list)
+    # We do not (yet) allow env obstacle init/goals to differ by user choice
+    env_goal_list = env_init_list[:]
     step_count = 0
     while True:
         if step_count == num_steps:
@@ -1134,12 +1163,10 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             return None, None
 
         # Patch (terminology follows that of the paper)
-        gamma = 1  # radius
-        delta = 1  # increment
-        iteration_count = 0
+        gamma = 1  # radius, increment
+        radius = 0
         while True:
-            iteration_count += 1
-            radius = gamma + (iteration_count-1)*delta
+            radius += gamma
             print "r_inc = "+str(radius)
             nbhd_inclusion = []  # Use Manhattan distance as metric
             for i in range(intent[0]-radius, intent[0]+radius+1):
@@ -1150,10 +1177,18 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             if len(nbhd_inclusion) == 0:
                 raise ValueError("gamma radius is too small; neighborhood is empty.")
             patch_goal_list = []
+            patch_env_goals = []
             for v in nbhd_inclusion:
                 if v in goal_list:
                     patch_goal_list.append(v)
+                if v in env_goal_list:
+                    patch_env_goals.append((env_goal_list.index(v), v))
             fail_loc_var = var_prefix+"_"+str(intent[0])+"_"+str(intent[1])
+            
+            # Re-sort env obstacle goals
+            patch_env_goal_list = env_init_list[:]
+            for env_g in patch_env_goals:
+                patch_env_goal_list[env_g[0]] = env_g[1]
             
             # Set of nodes in M corresponding to abstract nbhd.
             Reg = aut.computeGridReg(nbhd=nbhd_inclusion, var_prefix=var_prefix)
@@ -1162,23 +1197,28 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             Entry = aut.findEntry(Reg)
             Exit = aut.findExit(Reg)
             if len(Reg) == aut.size():
-                raise Exception("FATAL: reduced to original problem, i.e. S = Reg.")
+                raise Exception("FATAL: reduced to global problem, i.e. S = Reg.")
             
             W_patch, offset = subworld(W_actual, nbhd_inclusion)
             # Shift coordinates to be w.r.t. W_patch
             for ind in range(len(patch_goal_list)):
                 patch_goal_list[ind] = (patch_goal_list[ind][0]-offset[0],
                                         patch_goal_list[ind][1]-offset[1])
-            local_env_init = env_init_list[:]
-            for ind in range(len(local_env_init)):
-                local_env_init[ind] = (local_env_init[ind][0]-offset[0],
-                                       local_env_init[ind][1]-offset[1])
-            
+            for ind in range(len(patch_env_goal_list)):
+                patch_env_goal_list[ind] = (patch_env_goal_list[ind][0]-offset[0],
+                                            patch_env_goal_list[ind][1]-offset[1])
+
             patch_auts = []
             fail_flag = False
             for l in Init|set(Entry):
                 init_loc = extract_autcoord(aut.getAutState(l), var_prefix=var_prefix)[0]
                 init_loc = (init_loc[0]-offset[0], init_loc[1]-offset[1])
+                local_env_init = env_init_list[:]
+                for obs in range(num_obs):
+                    local_env_init[obs] = extract_autcoord(aut.getAutState(l),
+                                                           var_prefix=env_prefix+"_"+str(obs))[0]
+                    local_env_init[obs] = (local_env_init[obs][0]-offset[0],
+                                           local_env_init[obs][1]-offset[1])
                 local_goals_IDs = list(aut.computeReach(l, Reg) & set(Exit))
                 local_goals = []
                 for goal_ID in local_goals_IDs:
@@ -1190,6 +1230,7 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                 aut_patch = gen_navobs_soln(init_list=[init_loc], goal_list=patch_goal_list,
                                             W=W_patch, num_obs=num_obs,
                                             env_init_list=local_env_init,
+                                            env_goal_list=patch_env_goal_list,
                                             restrict_radius=restrict_radius,
                                             goals_disjunct=local_goals,
                                             var_prefix=var_prefix, env_prefix=env_prefix,
@@ -1203,6 +1244,9 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                 break
 
         # Merge (in several steps)
+
+        for aut_ind in range(len(patch_auts)):
+            patch_auts[aut_ind][0].trimDeadStates()
 
         # Set rule to clearing mem cells for nodes in the original M
         for node in aut.states:
@@ -1224,19 +1268,40 @@ def btsim_navobs(init, goal_list, aut, W_actual,
         sys_vars = prefix_filt(aut.states[0].state, prefix=var_prefix)  
         for aut_ind in range(len(patch_auts)):
             Ml = patch_auts[aut_ind][0]
+            for node in Ml.states:
+                temp_state = copy.copy(node.state)
+                node.state = {}
+                for (k,v) in temp_state.items():
+                    ex_result = extract_coord(k)
+                    if ((ex_result is None)
+                        or (ex_result[1] == -1 and ex_result[2] == -1)):
+                        # not spatially-dependent variable; ignore
+                        node.state[k] = v
+                    else:
+                        node.state[ex_result[0]+"_"+str(ex_result[1]+offset[0])+"_"+str(ex_result[2]+offset[1])] = v
+                for k in sys_vars.keys():
+                    if not node.state.has_key(k):
+                        node.state[k] = 0
             for obs in range(num_obs):
                 Ml.fleshOutGridState(env_vars_list[obs],
                                      special_var=env_nowhere_vars[obs])
-            for node in Ml.states:
-                # This approach is not general, in that we assume
-                # *all* system variables pertain to position in the
-                # abstract space (i.e. Z/P).
-                (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
-                for sys_var in sys_vars:
-                    node.state[sys_var] = 0
-                node.state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
-                node.addNodeRule(rule_setmatch)
-                node.cond = [cond_anynot for k in range(len(node.transition))]
+            # for node in Ml.states:
+            #     # This approach is not general, in that we assume
+            #     # *all* system variables pertain to position in the
+            #     # abstract space (i.e. Z/P).
+            #     new_state = {}
+            #     (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
+            #     for sys_var in sys_vars:
+            #         new_state[sys_var] = 0
+            #     new_state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
+            #     for obs in range(num_obs):
+            #         (i, j) = extract_autcoord(node, var_prefix=env_prefix+"_"+str(obs))
+            #         for env_var in env_vars_list[obs]:
+            #             new_state[env_var] = 0
+            #         new_state[env_prefix+"_"+str(obs)+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
+            #     node.state = copy.copy(new_state)
+            #     node.addNodeRule(rule_setmatch)
+            #     node.cond = [cond_anynot for k in range(len(node.transition))]
             patch_id_maps.append(aut.importChildAut(Ml,
                                                     tags={"color": (randint(0,255), randint(0,255), randint(0,255), 0.5),
                                                           "cluster_id": aut_ind}))
