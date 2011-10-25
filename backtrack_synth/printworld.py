@@ -6,7 +6,7 @@ SCL; 2011 Aug 26
 """
 
 import sys
-from btrsynth import pretty_world, read_worldf, image_world
+from btsynth import pretty_world, read_worldf, image_world
 
 try:
     import matplotlib.pyplot as plt

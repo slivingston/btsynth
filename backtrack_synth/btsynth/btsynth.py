@@ -48,7 +48,7 @@ def create_nominal(W, env_init_list, soln_str, restrict_radius=1,
     soln_str should contain the above path data. N.B., end-of-line
     delimiter should be '\n'.
     
-    Return instance of btrsynth.BTAutomaton
+    Return instance of btsynth.BTAutomaton
     """
     # Parse nominal path string
     nom_path = []
@@ -527,7 +527,7 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
     restrict_radius determines the domains of obstacles; cf. notes in
     function LTL_world.
 
-    Return instance of btrsynth.BTAutomaton on success;
+    Return instance of btsynth.BTAutomaton on success;
     None if not realizable, or an error occurs.
     """
     # Argument error checking
@@ -779,7 +779,7 @@ def gen_dsoln(init_list, goal_list, W, goals_disjunct=None,
     col) pairs specifying goals to be combined disjunctively in a
     single []<>... formula.  The default (None) does nothing.
 
-    Return instance of btrsynth.BTAutomaton on success;
+    Return instance of btsynth.BTAutomaton on success;
     None if not realizable, or an error occurs.
     """
     if len(init_list) == 0:
@@ -919,7 +919,7 @@ def cond_all(memory):
 
 def rule_clearall(aut, memory, prev_node_id, node_id, this_input):
     """Clear all memory values, regardless."""
-    print "DEBUG: automaton memory cleared by node "+str(node_id)
+    ##print "DEBUG: automaton memory cleared by node "+str(node_id)
     return dict([(k, 0) for k in memory.keys()])
 
 def rule_setmatch(aut, memory, prev_node_id, node_id, this_input):
@@ -939,7 +939,7 @@ def rule_setmatch(aut, memory, prev_node_id, node_id, this_input):
         raise Exception("FATAL: rule called with invalid node ID.")
     for k in memory.keys():
         if node.state.has_key(k) and node.state[k] != 0:
-            print "DEBUG: automaton memory \""+str(k)+"\" set by node "+str(node_id)
+            ##print "DEBUG: automaton memory \""+str(k)+"\" set by node "+str(node_id)
             memory[k] = 1
     return memory
 
@@ -962,7 +962,7 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
     (num_steps is not the same as num_it in the function dsim.)
 
     Returns an updated (to reflect the corrected controller)
-    instance of btrsynth.BTAutomaton and the known world map at
+    instance of btsynth.BTAutomaton and the known world map at
     time of completion.  Note that the ``known world'' may not match
     the given W_actual, because some parts of the world may never be
     visited (hence, uncertainty not corrected).

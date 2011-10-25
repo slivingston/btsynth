@@ -9,8 +9,8 @@ import tulip
 import tulip.congexf as cg
 import sys
 
-from btrsynth.btrsynth import *
-from btrsynth.automaton import BTAutomaton
+from btsynth.btsynth import *
+from btsynth.automaton import BTAutomaton
 
 
 if __name__ == "__main__":

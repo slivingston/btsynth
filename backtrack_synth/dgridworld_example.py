@@ -8,8 +8,8 @@ SCL; 2011 Aug, draft
 import tulip
 import sys
 
-from btrsynth.btrsynth import *
-from btrsynth.automaton import BTAutomaton
+from btsynth.btsynth import *
+from btsynth.automaton import BTAutomaton
 
 
 if __name__ == "__main__":

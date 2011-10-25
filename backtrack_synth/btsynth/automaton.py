@@ -5,7 +5,7 @@ Extend Automaton class from TuLiP.
 SCL; 2011 Sep, draft
 """
 
-import btrsynth as bts
+import btsynth as bts
 
 import random
 import copy
@@ -13,7 +13,7 @@ import tulip.automaton
 
 
 class BTAutomatonNode(tulip.automaton.AutomatonState):
-    """btrsynth-related extension of TuLiP automaton nodes.
+    """btsynth-related extension of TuLiP automaton nodes.
 
     Adds support for transition selection based on memory contents.
     See details below.
@@ -112,7 +112,7 @@ class BTAutomatonNode(tulip.automaton.AutomatonState):
 
 
 class BTAutomaton(tulip.automaton.Automaton):
-    """btrsynth-related extension of TuLiP Automaton.
+    """btsynth-related extension of TuLiP Automaton.
 
     Use BTAutomaton(tulip_aut=aut), where aut is an instance of the
     TuLiP Automaton class, to copy an existing object.
@@ -202,7 +202,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         elif isinstance(aut_state, tulip.automaton.AutomatonState):
             self.states.append(BTAutomatonNode(tulip_autnode=aut_state))
         else:
-            raise TypeError("given object should be instance of tulip.automaton.AutomatonState or btrsynth.automaton.BTAutomatonNode")
+            raise TypeError("given object should be instance of tulip.automaton.AutomatonState or btsynth.automaton.BTAutomatonNode")
 
     def addAutNode(self, node):
         """Alias addAutState, to make up for confusing tulip.automaton naming.
@@ -627,7 +627,7 @@ class BTAutomaton(tulip.automaton.Automaton):
 
     def writeDotFileCoordNodes(self, fname, hideZeros=False,
                      distinguishTurns=None, turnOrder=None):
-        """Use btrsynth.extract_coord to infer position data.
+        """Use btsynth.extract_coord to infer position data.
 
         Otherwise, output and return behavior is similar to
         writeDotFile method.
@@ -710,7 +710,7 @@ class BTAutomaton(tulip.automaton.Automaton):
 
     def writeDotFileCoord(self, fname, var_prefix="Y", env_prefix="X",
                           hideZeros=True, hideAgentNames=True):
-        """Use btrsynth.extract_coord to infer position data.
+        """Use btsynth.extract_coord to infer position data.
 
         Otherwise, output and return behavior is similar to
         writeDotFileEdged method.

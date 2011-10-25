@@ -1,1 +1,0 @@
-nosetests -v btrsynth.py

@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 """
-command-line wrapper for function btrsynth.create_nominal.
+command-line wrapper for function btsynth.create_nominal.
 
 SCL; 2011 Sep, draft
 """
 
 import sys
 
-from btrsynth.btrsynth import *
-from btrsynth.automaton import BTAutomaton
+from btsynth.btsynth import *
+from btsynth.automaton import BTAutomaton
 
 
 if __name__ == "__main__":
