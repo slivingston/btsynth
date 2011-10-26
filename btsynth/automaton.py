@@ -2,7 +2,8 @@
 """
 Extend Automaton class from TuLiP.
 
-SCL; 2011 Sep, draft
+Scott C. Livingston,
+2011.
 """
 
 import btsynth as bts

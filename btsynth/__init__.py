@@ -1,5 +1,5 @@
 """
-SCL; 2011 Sep, draft
+SCL, 2011.
 """
 
 __all__ = ["automaton"]

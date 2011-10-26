@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """
-SCL; 2011 Aug, Sep, draft
+Backtracking TL synthesis implementation for gridworlds.
+
+Scott C. Livingston,
+2011.
 """
 
 from automaton import BTAutomaton, BTAutomatonNode
@@ -1097,7 +1100,9 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
                     match_flag = True
                 for match_node in match_list:
                     if len(aut.getMem()) > 0:
-                        aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond = [cond_anynot for k in aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition]
+                        for k in range(len(aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond)):
+                            if aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond[k] is None:
+                                aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond[k] = cond_anynot
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond.extend([cond_all for k in goal_node.cond])
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition.extend(goal_node.transition)
                     else:
@@ -1285,23 +1290,9 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             for obs in range(num_obs):
                 Ml.fleshOutGridState(env_vars_list[obs],
                                      special_var=env_nowhere_vars[obs])
-            # for node in Ml.states:
-            #     # This approach is not general, in that we assume
-            #     # *all* system variables pertain to position in the
-            #     # abstract space (i.e. Z/P).
-            #     new_state = {}
-            #     (i, j) = extract_autcoord(node, var_prefix=var_prefix)[0]
-            #     for sys_var in sys_vars:
-            #         new_state[sys_var] = 0
-            #     new_state[var_prefix+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
-            #     for obs in range(num_obs):
-            #         (i, j) = extract_autcoord(node, var_prefix=env_prefix+"_"+str(obs))
-            #         for env_var in env_vars_list[obs]:
-            #             new_state[env_var] = 0
-            #         new_state[env_prefix+"_"+str(obs)+"_"+str(i+offset[0])+"_"+str(j+offset[1])] = 1
-            #     node.state = copy.copy(new_state)
-            #     node.addNodeRule(rule_setmatch)
-            #     node.cond = [cond_anynot for k in range(len(node.transition))]
+            for node in Ml.states:
+                node.addNodeRule(rule_setmatch)
+
             patch_id_maps.append(aut.importChildAut(Ml,
                                                     tags={"color": (randint(0,255), randint(0,255), randint(0,255), 0.5),
                                                           "cluster_id": aut_ind}))
@@ -1345,6 +1336,9 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                     match_flag = True
                 for match_node in match_list:
                     if len(aut.getMem()) > 0:
+                        for k in range(len(aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond)):
+                            if aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond[k] is None:
+                                aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond[k] = cond_anynot
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond.extend([cond_all for k in goal_node.cond])
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition.extend(goal_node.transition)
                     else:
