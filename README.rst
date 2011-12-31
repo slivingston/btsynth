@@ -21,6 +21,10 @@ The code includes an extension to the Automaton class defined in
 features are finite memory and switched transitions dependent on the
 state of this memory.
 
+To test btsynth, from the root directory run::
+
+  $ nosetests -v -w tests
+
 
 Gridworld notes
 ===============

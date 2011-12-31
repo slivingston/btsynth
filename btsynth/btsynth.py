@@ -1464,16 +1464,3 @@ def prefix_filt(d, prefix):
             if k.startswith(prefix):
                 match_list.append(k)
     return dict([(k, d[k]) for k in match_list])
-
-
-########################################
-# UNIT TESTS
-########################################
-
-def extract_coord_test():
-    assert(extract_coord("test_3_0") == ("test", 3, 0))
-    assert(extract_coord("obstacle_5_4_11") == ("obstacle_5", 4, 11))
-    assert(extract_coord("test3_0") is None)
-
-def prefix_filt_test():
-    assert(prefix_filt({"Y_0_0": 0, "Y_0_1": 1, "X_0_1_0": 1}, "Y") == {"Y_0_0": 0, "Y_0_1": 1})
