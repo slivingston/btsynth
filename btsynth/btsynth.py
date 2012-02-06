@@ -3,7 +3,7 @@
 Backtracking TL synthesis implementation for gridworlds.
 
 Scott C. Livingston,
-2011.
+2011, 2012.
 """
 
 from automaton import BTAutomaton, BTAutomatonNode
@@ -117,6 +117,32 @@ def create_nominal(W, env_init_list, soln_str, restrict_radius=1,
                                   special_var=env_vars[0])
 
     return aut
+
+
+def random_world(size, wall_density=.2, num_goals=2):
+    """Randomly generated problem world. Same return value as read_world.
+    
+    size is a pair, indicating number of rows and columns.
+    wall_density is the ratio of walls to total number of cells.
+    """
+    num_cells = size[0]*size[1]
+    goal_list = []
+    W = np.zeros(num_cells, dtype=np.uint8)
+    num_blocks = int(np.round(wall_density*num_cells))
+    for i in range(num_blocks):
+        avail_inds = np.array(range(num_cells))[W==0]
+        W[avail_inds[np.random.randint(low=0, high=len(avail_inds))]] = 1
+    for i in range(num_goals):
+        avail_inds = np.array(range(num_cells))[W==0]
+        avail_inds = [k for k in avail_inds if k not in goal_list]
+        goal_list.append(avail_inds[np.random.randint(low=0, high=len(avail_inds))])
+    avail_inds = np.array(range(num_cells))[W==0]
+    avail_inds = [k for k in avail_inds if k not in goal_list]
+    init_list = [avail_inds[np.random.randint(low=0, high=len(avail_inds))]]
+    W = W.reshape(size)
+    goal_list = [(k/size[1], k%size[1]) for k in goal_list]
+    init_list = [(k/size[1], k%size[1]) for k in init_list]
+    return (W, goal_list, init_list, [])
 
 
 def read_world(world_str):

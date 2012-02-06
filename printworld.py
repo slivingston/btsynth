@@ -2,11 +2,11 @@
 """
 Print ``pretty'' diagrams, given world files.
 
-SCL; 2011 Aug 26
+SCL; Aug 2011, Feb 2012.
 """
 
 import sys
-from btsynth import pretty_world, read_worldf, image_world
+from btsynth import pretty_world, read_worldf, image_world, random_world
 
 try:
     import matplotlib.pyplot as plt
@@ -16,9 +16,20 @@ except ImportError:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print "Usage: %s [-i] FILE [...]" % sys.argv[0]
+        print "Usage: %s [-r H W] [-i] [FILE] [...]" % sys.argv[0]
         exit(1)
     show_images = False
+
+    if "-r" in sys.argv:  # Random map requested
+        index = sys.argv.index("-r")
+        width = int(sys.argv[index+2])
+        height = int(sys.argv[index+1])
+        (W, goal_list, init_list, env_init_list) = random_world((height, width))
+        print pretty_world(W=W, goal_list=goal_list, init_list=init_list,
+                           env_init_list=env_init_list,
+                           show_grid=True)
+        exit(0)
+
     if "-i" in sys.argv:
         if plt is None:
             raise Exception("matplotlib missing; image-drawing routines are unavailable.")
