@@ -1,7 +1,7 @@
 """
-SCL, 2011.
+SCL; 2011, 2012.
 """
 
-__all__ = ["automaton"]
+__all__ = ["automaton", "gridworld"]
 
 from btsynth import *

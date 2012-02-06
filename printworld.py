@@ -6,7 +6,7 @@ SCL; Aug 2011, Feb 2012.
 """
 
 import sys
-from btsynth import pretty_world, read_worldf, image_world, random_world
+from btsynth import pretty_world, read_worldf, image_world, random_world, dump_world
 
 try:
     import matplotlib.pyplot as plt
@@ -24,10 +24,12 @@ if __name__ == "__main__":
         index = sys.argv.index("-r")
         width = int(sys.argv[index+2])
         height = int(sys.argv[index+1])
-        (W, goal_list, init_list, env_init_list) = random_world((height, width))
+        (W, goal_list, init_list, env_init_list) = random_world((height, width), num_env=1)
         print pretty_world(W=W, goal_list=goal_list, init_list=init_list,
                            env_init_list=env_init_list,
                            show_grid=True)
+        print "#"*60+"\n"
+        print dump_world(W, goal_list, init_list, env_init_list)
         exit(0)
 
     if "-i" in sys.argv:

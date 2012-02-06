@@ -23,7 +23,7 @@ state of this memory.
 
 To test btsynth, from the root directory run::
 
-  $ nosetests -v -w tests
+  $ nosetests
 
 
 Gridworld notes

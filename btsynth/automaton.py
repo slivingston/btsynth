@@ -3,10 +3,10 @@
 Extend Automaton class from TuLiP.
 
 Scott C. Livingston,
-2011.
+2011, 2012.
 """
 
-import btsynth as bts
+from gridworld import extract_autcoord, extract_coord
 
 import random
 import copy
@@ -562,7 +562,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         """
         Reg = []
         for k in range(len(self.states)):
-            coord = bts.extract_autcoord(self.states[k], var_prefix=var_prefix)
+            coord = extract_autcoord(self.states[k], var_prefix=var_prefix)
             if coord is not None and len(coord) > 1:
                 raise ValueError("more than one position match; error?")
             if (coord is not None) and (coord[0] in nbhd):
@@ -664,8 +664,8 @@ class BTAutomaton(tulip.automaton.Automaton):
                             print "WARNING: variable \""+k+"\" does not belong to an agent in distinguishedTurns"
                             return False
 
-                    if (v != 0) and (bts.extract_coord(k) is not None):
-                        coord = bts.extract_coord(k)
+                    if (v != 0) and (extract_coord(k) is not None):
+                        coord = extract_coord(k)
                         # Be aggressive about prefix spacing
                         label_str = "".join(coord[0].split("_"))
                         label_str += " ("+str(coord[1])+", "+str(coord[2])+")"
@@ -749,8 +749,8 @@ class BTAutomaton(tulip.automaton.Automaton):
                         print "WARNING: variable \""+k+"\" does not belong to an agent in distinguishedTurns"
                         return False
 
-                    if (v != 0) and (bts.extract_coord(k) is not None):
-                        coord = bts.extract_coord(k)
+                    if (v != 0) and (extract_coord(k) is not None):
+                        coord = extract_coord(k)
                         # Be aggressive about prefix spacing
                         label_str = "".join(coord[0].split("_"))
                         if coord[1:] == (-1, -1):
