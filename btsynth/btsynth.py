@@ -827,7 +827,12 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                                                            var_prefix=env_prefix+"_"+str(obs))[0]
                     local_env_init[obs] = (local_env_init[obs][0]-offset[0],
                                            local_env_init[obs][1]-offset[1])
-                local_goals_IDs = list(aut.computeReach(l, Reg) & set(Exit))
+                if len(Exit) == 0:
+                    # Special case where it suffices to remain local
+                    # forever (all system goals in here, etc.).
+                    local_goals_IDs = []  
+                else:
+                    local_goals_IDs = list(aut.computeReach(l, Reg) & set(Exit))
                 local_goals = []
                 for goal_ID in local_goals_IDs:
                     local_goals.append(extract_autcoord(aut.getAutState(goal_ID),
@@ -930,7 +935,10 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                             entry_node.transition[k] = patch_id_maps[aut_ind][match.transition[j]]
                             entry_node.cond[k] = None
 
-            match_flag = False
+            if len(local_goals_IDs) == 0:
+                # Special case where it suffices to remain local
+                # forever (all system goals in here, etc.).
+                match_flag = True
             for local_goal_ID in local_goals_IDs:
                 goal_node = aut.getAutState(local_goal_ID)
                 sys_state = prefix_filt(goal_node.state, prefix=var_prefix)
