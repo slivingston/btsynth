@@ -617,7 +617,7 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
                     patch_goal_list.append(v)
             fail_loc_var = var_prefix+"_"+str(intent[0])+"_"+str(intent[1])
             
-            # Set of nodes in M corresponding to abstract nbhd.
+            # Set of nodes in M corresponding to abstract neighborhood.
             Reg = aut.computeGridReg(nbhd=nbhd_inclusion, var_prefix=var_prefix)
             S0 = aut.getAutInit()
             Init = set([node.id for node in S0]) & set(Reg)
@@ -805,7 +805,7 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             Entry = aut.findEntry(Reg)
             Exit = aut.findExit(Reg)
             if len(Reg) == aut.size():
-                raise Exception("FATAL: reduced to global problem, i.e. S = Reg.")
+                raise Exception("FATAL: arrived at global problem, i.e. S = Reg.")
             
             W_patch, offset = subworld(W_actual, nbhd_inclusion)
             # Shift coordinates to be w.r.t. W_patch
