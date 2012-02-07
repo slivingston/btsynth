@@ -741,6 +741,9 @@ def btsim_navobs(init, goal_list, aut, W_actual,
     if num_obs is None, set it to len(env_init_list); this is a
     temporary hack till I clean up the code.
 
+    If the global problem is recovered, then a warning is printed and
+    (None, None) is returned.
+
     Cf. doc for navobs_sim and gen_navobs_soln.
     """
     if num_obs is None:
@@ -802,10 +805,19 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             Reg = aut.computeGridReg(nbhd=nbhd_inclusion, var_prefix=var_prefix)
             S0 = aut.getAutInit()
             Init = set([node.id for node in S0]) & set(Reg)
-            Entry = aut.findEntry(Reg)
+            Entry = list(aut.findEntry(Reg))
             Exit = aut.findExit(Reg)
+
+            # Remove newly blocked possibilities for dynamic obstacle
+            # positions.
+            for env_i in range(len(env_init_list)):
+                env_i_prefix = env_prefix+"_"+str(env_i)
+                Init = set([ind for ind in Init if extract_autcoord(aut.states[ind], var_prefix=env_i_prefix)[0] != intent])
+                Entry = set([ind for ind in Entry if extract_autcoord(aut.states[ind], var_prefix=env_i_prefix)[0] != intent])
+            
             if len(Reg) == aut.size():
-                raise Exception("FATAL: arrived at global problem, i.e. S = Reg.")
+                print "WARNING: arrived at global problem, i.e. S = Reg."
+                return None, None
             
             W_patch, offset = subworld(W_actual, nbhd_inclusion)
             # Shift coordinates to be w.r.t. W_patch
@@ -939,6 +951,8 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                 # Special case where it suffices to remain local
                 # forever (all system goals in here, etc.).
                 match_flag = True
+            else:
+                match_flag = False
             for local_goal_ID in local_goals_IDs:
                 goal_node = aut.getAutState(local_goal_ID)
                 sys_state = prefix_filt(goal_node.state, prefix=var_prefix)
