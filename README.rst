@@ -16,6 +16,16 @@ deterministic case, i.e. no adversarial environment.  E.g., try::
   $ ./printworld.py example_data/paper4{,_real}.world
   $ ./gridworld_example.py example_data/paper4{,_real}.world
 
+To generate a random gridworld problem of size 4 by 10, try::
+
+  $ ./printworld.py -r 4 10
+
+The output is a pretty visualization and a world code that can be
+saved to a plaintext file for later use (see below).  The problem thus
+generated may not be feasible.  A simple-minded but correct way to
+automatically test feasibility is to attempt global synthesis on it by
+calling gen_navobs_soln (see gridworld_example.py for example usage).
+
 The code includes an extension to the Automaton class defined in
 `TuLiP <http://tulip-control.sourceforge.net>`_. Examples of new
 features are finite memory and switched transitions dependent on the
