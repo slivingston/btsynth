@@ -61,7 +61,10 @@ if __name__ == "__main__":
         aut.trimDeadStates()
         print "After trimming dead nodes, M has size %d" % aut.size()
 
-        nom_time = nsprof.getstats()[-2].totaltime
+        ind = -1
+        while not hasattr(nsprof.getstats()[ind].code, "co_name") or (nsprof.getstats()[ind].code.co_name != "gen_navobs_soln"):
+            ind -= 1
+        nom_time = nsprof.getstats()[ind].totaltime
 
         aut.writeDotFileCoord("tempsyn-ORIG.dot")
         with open("tempsyn-ORIG.gexf", "w") as f:
@@ -101,7 +104,10 @@ if __name__ == "__main__":
                 aut_global.trimDeadStates()
                 print "after trimming dead nodes, m has size %d" % aut_global.size()
 
-                global_time = globalprof.getstats()[-2].totaltime
+                ind = -1
+                while not hasattr(globalprof.getstats()[ind].code, "co_name") or (globalprof.getstats()[ind].code.co_name != "gen_navobs_soln"):
+                    ind -= 1
+                global_time = globalprof.getstats()[ind].totaltime
 
                 aut_global.writeDotFileCoord("tempsyn-global.dot")
                 with open("tempsyn-global.gexf", "w") as f:
@@ -124,7 +130,10 @@ if __name__ == "__main__":
         if aut_patched is None:
             patch_time = -1  # -1 time indicates global problem recovered
         else:
-            patch_time = btprof.getstats()[-2].totaltime
+            ind = -1
+            while not hasattr(btprof.getstats()[ind].code, "co_name") or (btprof.getstats()[ind].code.co_name != "btsim_navobs"):
+                ind -= 1
+            patch_time = btprof.getstats()[ind].totaltime
 
             aut_patched.writeDotFileCoord("tempsyn-PATCHED.dot")
             with open("tempsyn-PATCHED.gexf", "w") as f:

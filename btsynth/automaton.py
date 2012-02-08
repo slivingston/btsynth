@@ -225,9 +225,10 @@ class BTAutomaton(tulip.automaton.Automaton):
         if not match_flag:
             raise TypeError("given node ID not found in automaton.")
         for prev_node in self.getAutInSet(node_id):
-            prev_ind = prev_node.transition.index(node_id)
-            prev_node.transition.remove(node_id)
-            del prev_node.cond[prev_ind]
+            while node_id in prev_node.transition:
+                prev_ind = prev_node.transition.index(node_id)
+                prev_node.transition.remove(node_id)
+                del prev_node.cond[prev_ind]
         del self.states[ind]
 
     def packIDs(self):
@@ -534,7 +535,11 @@ class BTAutomaton(tulip.automaton.Automaton):
                 if ((node.cond[trans_cand[1]] is None)
                     or node.cond[trans_cand[1]](self.getMem())):
                     if next_id is not None:
-                        raise Exception("FATAL: transition conflict unresolved.")
+                        print "!"*60
+                        print "WARNING: transition conflict unresolved. Taking first available..."
+                        print "!"*60
+                        break
+                        #raise Exception("FATAL: transition conflict unresolved.")
                     else:
                         next_id = trans_cand[0]
             if next_id is None:
