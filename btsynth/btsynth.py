@@ -934,7 +934,7 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             local_goals_IDs = patch_auts[aut_ind][2]
             entry_InSet = aut.getAutInSet(l)
             if len(entry_InSet) == 0:
-                S0 = [S0_node for S0_node in S0 if S0_node.id != l]
+                S0 = set([S0_node for S0_node in S0 if S0_node.id != l])
                 S0 = S0|set([aut.getAutState(patch_id_maps[aut_ind][Ml_node.id]) for Ml_node in Ml.getAutInit()])
                 continue  # Special case of node for initial conditions
             match_list = Ml.findAllAutPartState(aut.getAutState(l).state)
