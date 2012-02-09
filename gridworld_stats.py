@@ -144,6 +144,9 @@ if __name__ == "__main__":
         game_count += 1
         times.append((nom_time, global_time, patch_time))
         worlds_data.append((dump_world(W, goal_list, init_list, env_init_list), block_ind))
+        print "Backing up progress..."
+        with open(sys.argv[1], "w") as f:
+            pickle.dump((times, worlds_data), f)
 
     print "\n".join([str(nom_time)+", "+str(global_time)+", "+str(patch_time) for (nom_time, global_time, patch_time) in times])
     with open(sys.argv[1], "w") as f:

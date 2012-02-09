@@ -327,7 +327,8 @@ def navobs_sim(init, aut, W_actual, num_obs, var_prefix="Y", env_prefix="X",
     """
     # Handle initialization as a special case.
     if W_actual[init[0]][init[1]] == 1:
-        return init, None
+        import pdb; pdb.set_trace()
+        #return init, None
 
     # Based on given env_prefix, extract all environment variable names.
     env_vars = []
@@ -342,7 +343,8 @@ def navobs_sim(init, aut, W_actual, num_obs, var_prefix="Y", env_prefix="X",
     loc_var = var_prefix+"_"+str(i)+"_"+str(j)
     next_node = aut.findAllAutPartState({loc_var : 1})
     if len(next_node) == 0:
-        return init, None
+        import pdb; pdb.set_trace()
+        #return init, None
     next_node = next_node[0]
     history = [(i,j),]  # Initialize trace
     it_counter = 0
@@ -930,22 +932,32 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             l = patch_auts[aut_ind][1]
             Ml = patch_auts[aut_ind][0]
             local_goals_IDs = patch_auts[aut_ind][2]
-            entry_node = aut.getAutState(l)
-            sys_state = prefix_filt(entry_node.state, prefix=var_prefix)
-            match_list = Ml.findAllAutPartState(sys_state)
+            entry_InSet = aut.getAutInSet(l)
+            if len(entry_InSet) == 0:
+                S0 = [S0_node for S0_node in S0 if S0_node.id != l]
+                S0 = S0|set([aut.getAutState(patch_id_maps[aut_ind][Ml_node.id]) for Ml_node in Ml.getAutInit()])
+                continue  # Special case of node for initial conditions
+            match_list = Ml.findAllAutPartState(aut.getAutState(l).state)
             if len(match_list) == 0:
-                raise Exception("FATAL")
-            for match in match_list:
-                for k in range(len(entry_node.transition)):
-                    next_node = aut.getAutState(entry_node.transition[k])
-                    env_state = prefix_filt(next_node.state, prefix=env_prefix)
-                    # Find environment (outward edge) labels that are consistent.
-                    # Note that multiple matches leads to multiple overwrites, silently!
-                    for j in range(len(match.transition)):
-                        match_next = Ml.getAutState(match.transition[j])
-                        if set(env_state.items()).issubset(set(match_next.state.items())):
-                            entry_node.transition[k] = patch_id_maps[aut_ind][match.transition[j]]
-                            entry_node.cond[k] = None
+                import pdb; pdb.set_trace()
+            for entry_prenode in entry_InSet:
+                entry_prenode.transition[entry_prenode.transition.index(l)] = patch_id_maps[aut_ind][match_list[0].id]
+            # entry_node = aut.getAutState(l)
+            # sys_state = prefix_filt(entry_node.state, prefix=var_prefix)
+            # match_list = Ml.findAllAutPartState(sys_state)
+            # if len(match_list) == 0:
+            #     raise Exception("FATAL")
+            # for match in match_list:
+            #     for k in range(len(entry_node.transition)):
+            #         next_node = aut.getAutState(entry_node.transition[k])
+            #         env_state = prefix_filt(next_node.state, prefix=env_prefix)
+            #         # Find environment (outward edge) labels that are consistent.
+            #         # Note that multiple matches leads to multiple overwrites, silently!
+            #         for j in range(len(match.transition)):
+            #             match_next = Ml.getAutState(match.transition[j])
+            #             if set(env_state.items()).issubset(set(match_next.state.items())):
+            #                 entry_node.transition[k] = patch_id_maps[aut_ind][match.transition[j]]
+            #                 entry_node.cond[k] = None
 
             if len(local_goals_IDs) == 0:
                 # Special case where it suffices to remain local
@@ -983,6 +995,12 @@ def btsim_navobs(init, goal_list, aut, W_actual,
         for kill_id in kill_list:
             aut.removeNode(kill_id)
         aut.packIDs()
+
+        # Clean up any dangling ends
+        last_size = -1
+        while last_size != aut.size():
+            last_size = aut.size()
+            aut.trimDeadStates()
         
         # Pick-off invalid initial nodes, and other clean-up
         aut.removeFalseInits(S0)

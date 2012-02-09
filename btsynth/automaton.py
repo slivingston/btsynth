@@ -508,7 +508,12 @@ class BTAutomaton(tulip.automaton.Automaton):
             raise Exception("Given node ID not recognized.")
 
         if randNext:
-            sample_node_ID = random.choice(node.transition)
+            transition = []
+            for t in node.transition:
+                # Avoid going to the nowhere coordinates
+                if not any([(v == 1) and ("_n_n" in k) for (k, v) in self.getAutState(t).state.items()]):
+                    transition.append(t)
+            sample_node_ID = random.choice(transition)
             sample_node = self.getAutState(sample_node_ID)
             for k in env_state.keys():
                 env_state[k] = sample_node.state[k]
