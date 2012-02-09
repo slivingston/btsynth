@@ -126,7 +126,14 @@ if __name__ == "__main__":
 
         print "sim and patch..."
         btprof = Profile()
-        btprof.run("(aut_patched, W_patched) = btsim_navobs(init_list[0], goal_list, aut, W_actual, env_init_list=env_init_list, num_steps=100)")
+        try:
+            btprof.run("(aut_patched, W_patched) = btsim_navobs(init_list[0], goal_list, aut, W_actual, env_init_list=env_init_list, num_steps=100)")
+        except:
+            print "Error: exception caught during call to btsim_navobs;"
+            print "dropping this trial, and inserting marked copy into results list."
+            times.append((-1, -1, -1))
+            worlds_data.append((dump_world(W, goal_list, init_list, env_init_list), block_ind))
+            continue
         if aut_patched is None:
             patch_time = -1  # -1 time indicates global problem recovered
         else:
