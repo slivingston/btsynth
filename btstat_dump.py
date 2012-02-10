@@ -55,7 +55,12 @@ if __name__ == "__main__":
 
         exit(0)
 
+    patho_trials = []  # Indices of trials where patching took more
+                       # time than global re-synthesis.
     for trial in valid_trials:
+        if times[trial][2] > times[trial][1]:
+            patho_trials.append(trial)
+
         (W, goal_list, init_list, env_init_list) = read_world(world_data[trial][0])
         print "Trial "+str(trial)
         print "Nominal: %.4f; Global %.4f; Patching %.4f" % times[trial]
@@ -65,15 +70,25 @@ if __name__ == "__main__":
         print "#"*60+"\n"
 
     # Statistics in summary
-    N = len(valid_trials)
+    N = len(valid_trials) - len(patho_trials)
     lg_ratios = []
     for trial in valid_trials:
+        if trial in patho_trials:
+            continue
         if times[trial][2] < 0:
             # Local problem arrived at global
             times[trial] = (times[trial][0], times[trial][1], times[trial][1])
         lg_ratios.append(times[trial][2]/times[trial][1])
     lg_ratios = np.array(lg_ratios)
+    global_times = np.array([times[trial][1] for trial in set(valid_trials)-set(patho_trials)])
+    patch_times = np.array([times[trial][2] for trial in set(valid_trials)-set(patho_trials)])
     
     print "N = "+str(N)
     print "mean and std dev of ratio of local-to-global time: %.4f, %.4f" % (np.mean(lg_ratios), np.std(lg_ratios))
+    print "mean and std dev of global synthesis time: %.4f, %.4f" % (np.mean(global_times), np.std(global_times))
+    print "mean and std dev of patching time: %.4f, %.4f" % (np.mean(patch_times), np.std(patch_times))
     print lg_ratios
+
+    print "Trials interrupted by exceptions: "+(" ".join([str(trial) for trial in set(range(len(times)))-set(valid_trials)]))
+    print "Trials with ratio above 1: "+(" ".join([str(trial) for trial in patho_trials]))
+
