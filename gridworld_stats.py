@@ -11,7 +11,7 @@ import tulip.congexf as cg
 import sys
 import pickle
 
-from btsynth.btsynth import *
+from btsynth import *
 from btsynth.automaton import BTAutomaton
 
 # Profiling

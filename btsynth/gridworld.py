@@ -315,6 +315,149 @@ def LTL_world(W, var_prefix="obs",
               center_loc=None, restrict_radius=1):
     """Convert world matrix W into an LTL formula describing transitions.
     
+    Syntax is that of gr1c; in particular, "next" variables are
+    primed. For example, x' refers to the variable x at the next time
+    step.
+
+    The variables are named according to var_prefix_R_C, where
+    var_prefix is given, R is the row, and column the cell
+    (0-indexed).
+
+    If center_loc is None (default), then object can occupy any open
+    cell in the given world matrix.  If center_loc is a pair, then it
+    indicates a location (row, column) in the world matrix and
+    combined with the argument restrict_radius (same units as world
+    matrix; 1 == 1 step by row or column), a restricted region of
+    movement for the object is specified.  If part of the restricted
+    region is outside the given world, then we must allow a movement
+    to nowhere (i.e. ``out of the world W'') and movements back into
+    W, where such transitions can occur along the boundary of W at
+    which the restricted region leaves W.  Since the restricted region
+    is compact and connected, transitions to/from nowhere can happen
+    anywhere along this boundary (so, you might view ``nowhere'' as a
+    special location connected to all this overflow positions).
+
+    ``nowhere'' has the position (-1, -1).
+
+    Return the formula as a list of transition rules, which can be
+    used directly in building a specification in a GRSpec object
+    (defined in spec module of TuLiP).  Return None if failure.
+    """
+    always_nowhere_flag = False
+    nowhere = [False,  # corresponds to row_low
+               False,  # row_high
+               False,  # col_low
+               False]  # col_high
+    if center_loc is not None:
+        row_low = center_loc[0]-restrict_radius
+        if row_low < 0:
+            row_low = 0
+            nowhere[0] = True
+        row_high = center_loc[0]+restrict_radius
+        if row_high > W.shape[0]-1:
+            row_high = W.shape[0]-1
+            nowhere[1] = True
+        col_low = center_loc[1]-restrict_radius
+        if col_low < 0:
+            col_low = 0
+            nowhere[2] = True
+        col_high = center_loc[1]+restrict_radius
+        if col_high > W.shape[1]-1:
+            col_high = W.shape[1]-1
+            nowhere[3] = True
+        # Special case:
+        if (row_low > W.shape[0]-1 or row_high < 0
+            or col_low > W.shape[1]-1 or col_high < 0):
+            always_nowhere_flag = True
+    else:
+        row_low = 0
+        row_high = W.shape[0]-1
+        col_low = 0
+        col_high = W.shape[1]-1
+    out_trans = []
+    # Safety, transitions
+    for i in range(row_low, row_high+1):
+        for j in range(col_low, col_high+1):
+            if W[i][j] == 1:
+                continue  # Cannot start from an occupied cell.
+            out_trans.append(var_prefix+"_"+str(i)+"_"+str(j)+" -> (")
+            # Normal transitions:
+            out_trans[-1] += var_prefix+"_"+str(i)+"_"+str(j)+"'"
+            if i > row_low and W[i-1][j] == 0:
+                out_trans[-1] += " | " + var_prefix+"_"+str(i-1)+"_"+str(j)+"'"
+            if j > col_low and W[i][j-1] == 0:
+                out_trans[-1] += " | " + var_prefix+"_"+str(i)+"_"+str(j-1)+"'"
+            if i < row_high and W[i+1][j] == 0:
+                out_trans[-1] += " | " + var_prefix+"_"+str(i+1)+"_"+str(j)+"'"
+            if j < col_high and W[i][j+1] == 0:
+                out_trans[-1] += " | " + var_prefix+"_"+str(i)+"_"+str(j+1)+"'"
+            # Transitions to ``nowhere'':
+            if ((i == row_low and nowhere[0])
+                or (i == row_high and nowhere[1])
+                or (j == col_low and nowhere[2])
+                or (j == col_high and nowhere[3])):
+                out_trans[-1] += " | " + var_prefix+"_n_n'"
+            out_trans[-1] += ")"
+    if nowhere[0] or nowhere[1] or nowhere[2] or nowhere[3]:
+        # Add transitions from ``nowhere''
+        out_trans.append(var_prefix+"_n_n"+" -> (")
+        out_trans[-1] += var_prefix+"_n_n'"
+        if not always_nowhere_flag:
+            if nowhere[0]:
+                for j in range(col_low, col_high+1):
+                    out_trans[-1] += " | " + var_prefix+"_"+str(row_low)+"_"+str(j)+"'"
+            if nowhere[1]:
+                for j in range(col_low, col_high+1):
+                    out_trans[-1] += " | " + var_prefix+"_"+str(row_high)+"_"+str(j)+"'"
+            if nowhere[2]:
+                for i in range(row_low, row_high+1):
+                    out_trans[-1] += " | " + var_prefix+"_"+str(i)+"_"+str(col_low)+"'"
+            if nowhere[3]:
+                for i in range(row_low, row_high+1):
+                    out_trans[-1] += " | " + var_prefix+"_"+str(i)+"_"+str(col_high)+"'"
+        out_trans[-1] += ")"
+    
+    # Safety, static
+    for i in range(row_low, row_high+1):
+        for j in range(col_low, col_high+1):
+            if W[i][j] == 1:
+                out_trans.append("!(" + var_prefix+"_"+str(i)+"_"+str(j)+"'" + ")")
+
+    # Safety, mutex
+    first_subformula = True
+    out_trans.append("")
+    pos_indices = [k for k in itertools.product(range(row_low, row_high+1), range(col_low, col_high+1))]
+    if nowhere[0] or nowhere[1] or nowhere[2] or nowhere[3]:
+        pos_indices.append((-1, -1))
+    for outer_ind in pos_indices:
+        if outer_ind != (-1, -1) and W[outer_ind[0]][outer_ind[1]] == 1:
+            continue
+        if not first_subformula:
+            out_trans[-1] += " | "
+        if outer_ind == (-1, -1):
+            out_trans[-1] += "(" + var_prefix+"_n_n'"
+        else:
+            out_trans[-1] += "(" + var_prefix+"_"+str(outer_ind[0])+"_"+str(outer_ind[1])+"'"
+        for inner_ind in pos_indices:
+            if ((inner_ind != (-1, -1) and W[inner_ind[0]][inner_ind[1]] == 1)
+                or outer_ind == inner_ind):
+                continue
+            if inner_ind == (-1, -1):
+                out_trans[-1] += " & (!" + var_prefix+"_n_n')"
+            else:
+                out_trans[-1] += " & (!" + var_prefix+"_"+str(inner_ind[0])+"_"+str(inner_ind[1])+"'" + ")"
+        out_trans[-1] += ")"
+        first_subformula = False
+
+    return out_trans
+
+
+def LTL_world_JTLV(W, var_prefix="obs",
+                   center_loc=None, restrict_radius=1):
+    """Convert world matrix W into an LTL formula describing transitions.
+
+    Use JTLV syntax in the returned formula.
+    
     The variables are named according to var_prefix_R_C, where
     var_prefix is given, R is the row, and column the cell
     (0-indexed).

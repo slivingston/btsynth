@@ -8,7 +8,7 @@ SCL; 2011 Aug, draft
 import tulip
 import sys
 
-from btsynth.btsynth import *
+from btsynth import *
 from btsynth.automaton import BTAutomaton
 
 

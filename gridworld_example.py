@@ -9,7 +9,7 @@ import tulip
 import tulip.congexf as cg
 import sys
 
-from btsynth.btsynth import *
+from btsynth import *
 from btsynth.automaton import BTAutomaton
 
 

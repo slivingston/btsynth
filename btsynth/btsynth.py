@@ -12,7 +12,9 @@ from gridworld import *
 import itertools
 import copy
 import numpy as np
-import tulip.grgameint
+import tulip.gr1cint
+import tulip.jtlvint
+from tulip.spec import GRSpec
 
 
 def create_nominal(W, env_init_list, soln_str, restrict_radius=1,
@@ -112,8 +114,178 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
                     goals_disjunct=None,
                     restrict_radius=1,
                     var_prefix="Y", env_prefix="X",
-                    fname_prefix="tempsyn"):
+                    only_realizability=False):
     """Generate solution as in gen_dsoln but now with dynamic obstacles.
+
+    Use gr1c (as interfaced through TuLiP) for synthesis.
+
+    This is a limited extension to the problem considered in
+    gen_dsoln. Here we introduce a finite number (num_obs) of
+    obstacles that navigate in restricted regions of the map W, thus
+    requiring a reactive controller to safely avoid them while
+    visiting the goal locations infinitely often.
+
+    env_init_list is the center position for each (env-controlled)
+    obstacle. Thus it must be that len(env_init_list) = num_obs
+
+    If env_goal_list is None (default), then regard the obstacle
+    initial positions as their goal positions.
+
+    N.B., we do not verify that env_goals are within restrict_radius
+    of initial env obstacle positions.
+
+    restrict_radius determines the domains of obstacles; cf. notes in
+    function LTL_world.
+
+    Return instance of btsynth.BTAutomaton on success;
+    None if not realizable, or an error occurs.
+
+    If only_realizability is True, then do *not* perform
+    synthesis. Instead, only check realizability of the specification,
+    and return True if realizable, False if not.
+    """
+    # Argument error checking
+    if (len(init_list) == 0) or (num_obs < 0):
+        return None
+
+    # Handle default env obstacle goal case
+    if env_goal_list is None:
+        env_goal_list = env_init_list
+
+    # Handle degenerate case of no obstacles (thus, deterministic problem).
+    if num_obs < 1:
+        return gen_dsoln(init_list=init_list, goal_list=goal_list, W=W,
+                         goals_disjunct=goals_disjunct,
+                         var_prefix=var_prefix,
+                         only_realizability=only_realizability)
+
+    ########################################
+    # Environment prep
+    obs_bounds = []
+    env_trans = []
+    for k in range(num_obs):
+        center_loc = env_goal_list[k]
+        row_low = center_loc[0]-restrict_radius
+        nowhere = [False,  # corresponds to row_low
+                   False,  # row_high
+                   False,  # col_low
+                   False]  # col_high
+        row_low = center_loc[0]-restrict_radius
+        if row_low < 0:
+            row_low = 0
+            nowhere[0] = True
+        row_high = center_loc[0]+restrict_radius
+        if row_high > W.shape[0]-1:
+            row_high = W.shape[0]-1
+            nowhere[1] = True
+        col_low = center_loc[1]-restrict_radius
+        if col_low < 0:
+            col_low = 0
+            nowhere[2] = True
+        col_high = center_loc[1]+restrict_radius
+        if col_high > W.shape[1]-1:
+            col_high = W.shape[1]-1
+            nowhere[3] = True
+        obs_bounds.append((row_low, row_high, col_low, col_high, nowhere))
+        env_trans.extend(LTL_world(W, var_prefix=env_prefix+"_"+str(k),
+                                   center_loc=center_loc,
+                                   restrict_radius=restrict_radius))
+
+    env_vars = []
+    for k in range(num_obs):
+        if (obs_bounds[k][4][0] or obs_bounds[k][4][1]
+            or obs_bounds[k][4][2] or obs_bounds[k][4][3]):
+            env_vars.append(env_prefix+"_"+str(k)+"_n_n")
+        for i in range(obs_bounds[k][0], obs_bounds[k][1]+1):
+            for j in range(obs_bounds[k][2], obs_bounds[k][3]+1):
+                env_vars.append(env_prefix+"_"+str(k)+"_"+str(i)+"_"+str(j))
+
+    # Environment progress: always eventually obstacle returns to
+    # initial position.
+    env_goal = []
+    for k in range(num_obs):
+        center_loc = env_goal_list[k]
+        if (center_loc[0] >= 0 and center_loc[0] <= W.shape[0]-1
+            and center_loc[1] >= 0 and center_loc[1] <= W.shape[1]-1):
+            env_goal.append(env_prefix+"_"+str(k)+"_"+str(center_loc[0])+"_"+str(center_loc[1]))
+        else:
+            env_goal.append(env_prefix+"_"+str(k)+"_n_n")
+
+    env_init = ""
+    if (env_init_list is not None) and len(env_init_list) > 0:
+        for obs_ind in range(num_obs):
+            loc = env_init_list[obs_ind]
+            if len(env_init) > 0:
+                env_init += " | "
+            if (loc[0] < row_low or loc[0] > row_high
+                or loc[1] < col_low or loc[1] > col_high):
+                env_init += "(" + env_prefix+"_"+str(obs_ind)+"_n_n)"
+            else:
+                env_init += "(" + env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+    
+    ########################################
+    # Sys prep
+    sys_vars = []
+    for i in range(W.shape[0]):
+        for j in range(W.shape[1]):
+            sys_vars.append(var_prefix+"_"+str(i)+"_"+str(j))
+
+    sys_trans = LTL_world(W, var_prefix=var_prefix)
+
+    init_str = ""
+    for loc in init_list:
+        if len(init_str) > 0:
+            init_str += " | "
+        init_str += "(" + var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+
+    sys_goal = []
+    for loc in goal_list:
+        sys_goal.append(var_prefix+"_"+str(loc[0])+"_"+str(loc[1]))
+    
+    if (goals_disjunct is not None) and len(goals_disjunct) > 0:
+        goal_dstr = ""
+        for loc in goals_disjunct:
+            if len(goal_dstr) == 0:
+                goal_dstr += var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+            else:
+                goal_dstr += " | "+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+        sys_goal.append(goal_dstr)
+
+    ########################################
+    # Interaction: avoid collisions
+    coll_str = ""
+    for k in range(num_obs):
+        for i in range(obs_bounds[k][0], obs_bounds[k][1]+1):
+            for j in range(obs_bounds[k][2], obs_bounds[k][3]+1):
+                if len(coll_str) > 0:
+                    coll_str += " & "
+                coll_str += "!(" + var_prefix+"_"+str(i)+"_"+str(j)+"'"
+                coll_str += " & " + env_prefix+"_"+str(k)+"_"+str(i)+"_"+str(j)+"'"
+                coll_str += ")"
+    if len(coll_str) > 0:
+        sys_trans.append(coll_str)
+
+    spec = GRSpec(sys_vars=sys_vars, sys_init=init_str,
+                  sys_safety=sys_trans, sys_prog=sys_goal,
+                  env_vars=env_vars, env_init=env_init,
+                  env_safety=env_trans, env_prog=env_goal)
+    print spec.dumpgr1c() #DEBUG
+
+    if only_realizability:
+        return tulip.gr1cint.check_realizable(spec, verbose=1)
+    
+    return tulip.gr1cint.synthesize(spec, verbose=1)  # NOT IMPLEMENTED YET
+
+
+def gen_navobs_soln_JTLV(init_list, goal_list, W, num_obs,
+                         env_init_list, env_goal_list=None,
+                         goals_disjunct=None,
+                         restrict_radius=1,
+                         var_prefix="Y", env_prefix="X",
+                         fname_prefix="tempsyn"):
+    """Generate solution as in gen_dsoln but now with dynamic obstacles.
+
+    Use JTLV (as interfaced through TuLiP) for synthesis.
 
     This is a limited extension to the problem considered in
     gen_dsoln. Here we introduce a finite number (num_obs) of
@@ -146,9 +318,9 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
 
     # Handle degenerate case of no obstacles (thus, deterministic problem).
     if num_obs < 1:
-        return gen_dsoln(init_list=init_list, goal_list=goal_list, W=W,
-                         goals_disjunct=goals_disjunct,
-                         var_prefix=var_prefix, fname_prefix=fname_prefix)
+        return gen_dsoln_JTLV(init_list=init_list, goal_list=goal_list, W=W,
+                              goals_disjunct=goals_disjunct,
+                              var_prefix=var_prefix, fname_prefix=fname_prefix)
 
     ########################################
     # Environment prep
@@ -295,12 +467,12 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
         if len(coll_str) > 0:
             f.write(" & \n" + coll_str)
         f.write("\n;")
-    
+
     # Try JTLV synthesis
-    realizable = tulip.grgameint.solveGame(smv_file=fname_prefix+".smv",
-                                           spc_file=fname_prefix+".spc",
-                                           init_option=1, file_exist_option="r",
-                                           heap_size="-Xmx2048m")
+    realizable = tulip.jtlvint.solveGame(smv_file=fname_prefix+".smv",
+                                         spc_file=fname_prefix+".spc",
+                                         init_option=1, file_exist_option="r",
+                                         heap_size="-Xmx2048m")
 
     if not realizable:
         return None
@@ -376,8 +548,70 @@ def navobs_sim(init, aut, W_actual, num_obs, var_prefix="Y", env_prefix="X",
 
 
 def gen_dsoln(init_list, goal_list, W, goals_disjunct=None,
-              var_prefix="Y", fname_prefix="tempsyn"):
+              var_prefix="Y", only_realizability=False):
     """Generate deterministic solution, given initial and goal states.
+
+    Use gr1c (as interfaced through TuLiP) for synthesis.
+
+    init_list is a list of pairs (row, col), signifying locations in
+    the world matrix W from which the system can be initialized.
+    Similarly for goal_list, but locations to visit infinitely often.
+
+    If goals_disjunct is not None, then it must be a list of (row,
+    col) pairs specifying goals to be combined disjunctively in a
+    single []<>... formula.  The default (None) does nothing.
+
+    Return instance of btsynth.BTAutomaton on success;
+    None if not realizable, or an error occurs.
+
+    If only_realizability is True, then do *not* perform
+    synthesis. Instead, only check realizability of the specification,
+    and return True if realizable, False if not.
+    """
+    if len(init_list) == 0:
+        return None
+
+    spec_trans = LTL_world(W, var_prefix=var_prefix)
+
+    sys_vars = []
+    for i in range(W.shape[0]):
+        for j in range(W.shape[1]):
+            sys_vars.append(var_prefix+"_"+str(i)+"_"+str(j))
+
+    init_str = ""
+    for loc in init_list:
+        if len(init_str) > 0:
+            init_str += " | "
+        init_str += "(" + var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+
+    spec_goal = []
+    for loc in goal_list:
+        spec_goal.append(var_prefix+"_"+str(loc[0])+"_"+str(loc[1]))
+
+    if goals_disjunct is not None:
+        goal_dstr = ""
+        for loc in goals_disjunct:
+            if len(goal_dstr) == 0:
+                goal_dstr += var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+            else:
+                goal_dstr += " | "+var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+        spec_goal.append(goal_dstr)
+
+    spec = GRSpec(sys_vars=sys_vars, sys_init=init_str,
+                  sys_safety=spec_trans, sys_prog=spec_goal)
+    print spec.dumpgr1c() #DEBUG
+
+    if only_realizability:
+        return tulip.gr1cint.check_realizable(spec, verbose=1)
+    
+    return tulip.gr1cint.synthesize(spec, verbose=1)  # NOT IMPLEMENTED YET
+
+
+def gen_dsoln_JTLV(init_list, goal_list, W, goals_disjunct=None,
+                   var_prefix="Y", fname_prefix="tempsyn"):
+    """Generate deterministic solution, given initial and goal states.
+
+    Use JTLV (as interfaced through TuLiP) for synthesis.
 
     init_list is a list of pairs (row, col), signifying locations in
     the world matrix W from which the system can be initialized.
@@ -441,9 +675,9 @@ def gen_dsoln(init_list, goal_list, W, goals_disjunct=None,
         f.write("\n;")
     
     # Try JTLV synthesis
-    realizable = tulip.grgameint.solveGame(smv_file=fname_prefix+".smv",
-                                           spc_file=fname_prefix+".spc",
-                                           init_option=1, file_exist_option="r")
+    realizable = tulip.jtlvint.solveGame(smv_file=fname_prefix+".smv",
+                                         spc_file=fname_prefix+".spc",
+                                         init_option=1, file_exist_option="r")
 
     if not realizable:
         return None
