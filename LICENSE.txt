@@ -1,4 +1,4 @@
-btsynth is Copyright 2011, Scott C. Livingston, California Institute of Technology.
+btsynth is Copyright 2011, 2012, Scott C. Livingston, California Institute of Technology.
 It is released under the terms of the GNU Lesser General Public
 License, version 3, as reproduced below.
 
