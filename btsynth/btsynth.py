@@ -219,9 +219,17 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
                 env_init += " | "
             if (loc[0] < row_low or loc[0] > row_high
                 or loc[1] < col_low or loc[1] > col_high):
-                env_init += "(" + env_prefix+"_"+str(obs_ind)+"_n_n)"
+                env_init += "(" + env_prefix+"_"+str(obs_ind)+"_n_n"
+                env_init_mutex = " & ".join(["!"+ovar for ovar in env_vars if ovar.startswith(env_prefix+"_"+str(obs_ind)) and ovar != env_prefix+"_"+str(obs_ind)+"_n_n"])
+                if len(env_init_mutex) > 0:
+                    env_init += " & " + env_init_mutex
+                env_init += ")"
             else:
-                env_init += "(" + env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+                env_init += "(" + env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1])
+                env_init_mutex = " & ".join(["!"+ovar for ovar in env_vars if ovar.startswith(env_prefix+"_"+str(obs_ind)) and ovar != env_prefix+"_"+str(obs_ind)+"_"+str(loc[0])+"_"+str(loc[1])])
+                if len(env_init_mutex) > 0:
+                    env_init += " & " + env_init_mutex
+                env_init += ")"
     
     ########################################
     # Sys prep
@@ -236,7 +244,11 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
     for loc in init_list:
         if len(init_str) > 0:
             init_str += " | "
-        init_str += "(" + var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+        init_str += "(" + var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+        init_str_mutex = " & ".join(["!"+ovar for ovar in sys_vars if ovar != var_prefix+"_"+str(loc[0])+"_"+str(loc[1])])
+        if len(init_str_mutex) > 0:
+            init_str += " & " + init_str_mutex
+        init_str += ")"
 
     sys_goal = []
     for loc in goal_list:
@@ -269,12 +281,15 @@ def gen_navobs_soln(init_list, goal_list, W, num_obs,
                   sys_safety=sys_trans, sys_prog=sys_goal,
                   env_vars=env_vars, env_init=env_init,
                   env_safety=env_trans, env_prog=env_goal)
-    print spec.dumpgr1c() #DEBUG
 
     if only_realizability:
         return tulip.gr1cint.check_realizable(spec, verbose=1)
     
-    return tulip.gr1cint.synthesize(spec, verbose=1)  # NOT IMPLEMENTED YET
+    aut = tulip.gr1cint.synthesize(spec, verbose=1)
+    if aut is not None:
+        return BTAutomaton(tulip_aut=aut)
+    else:
+        return None  # Attempt at synthesis failed
 
 
 def gen_navobs_soln_JTLV(init_list, goal_list, W, num_obs,
@@ -350,9 +365,9 @@ def gen_navobs_soln_JTLV(init_list, goal_list, W, num_obs,
             col_high = W.shape[1]-1
             nowhere[3] = True
         obs_bounds.append((row_low, row_high, col_low, col_high, nowhere))
-        env_str.append(LTL_world(W, var_prefix="e."+env_prefix+"_"+str(k),
-                                 center_loc=center_loc,
-                                 restrict_radius=restrict_radius))
+        env_str.append(LTL_world_JTLV(W, var_prefix="e."+env_prefix+"_"+str(k),
+                                      center_loc=center_loc,
+                                      restrict_radius=restrict_radius))
 
     # Environment progress: always eventually obstacle returns to
     # initial position.
@@ -383,7 +398,7 @@ def gen_navobs_soln_JTLV(init_list, goal_list, W, num_obs,
     
     ########################################
     # Sys prep
-    safety_str = LTL_world(W, var_prefix="s."+var_prefix)
+    safety_str = LTL_world_JTLV(W, var_prefix="s."+var_prefix)
 
     init_str = ""
     for loc in init_list:
@@ -582,13 +597,17 @@ def gen_dsoln(init_list, goal_list, W, goals_disjunct=None,
     for loc in init_list:
         if len(init_str) > 0:
             init_str += " | "
-        init_str += "(" + var_prefix+"_"+str(loc[0])+"_"+str(loc[1]) + ")"
+        init_str += "(" + var_prefix+"_"+str(loc[0])+"_"+str(loc[1])
+        init_str_mutex = " & ".join(["!"+ovar for ovar in sys_vars if ovar != var_prefix+"_"+str(loc[0])+"_"+str(loc[1])])
+        if len(init_str_mutex) > 0:
+            init_str += " & " + init_str_mutex
+        init_str += ")"
 
     spec_goal = []
     for loc in goal_list:
         spec_goal.append(var_prefix+"_"+str(loc[0])+"_"+str(loc[1]))
 
-    if goals_disjunct is not None:
+    if (goals_disjunct is not None) and len(goals_disjunct) > 0:
         goal_dstr = ""
         for loc in goals_disjunct:
             if len(goal_dstr) == 0:
@@ -599,12 +618,15 @@ def gen_dsoln(init_list, goal_list, W, goals_disjunct=None,
 
     spec = GRSpec(sys_vars=sys_vars, sys_init=init_str,
                   sys_safety=spec_trans, sys_prog=spec_goal)
-    print spec.dumpgr1c() #DEBUG
 
     if only_realizability:
         return tulip.gr1cint.check_realizable(spec, verbose=1)
-    
-    return tulip.gr1cint.synthesize(spec, verbose=1)  # NOT IMPLEMENTED YET
+
+    aut = tulip.gr1cint.synthesize(spec, verbose=1)
+    if aut is not None:
+        return BTAutomaton(tulip_aut=aut)
+    else:
+        return None  # Attempt at synthesis failed
 
 
 def gen_dsoln_JTLV(init_list, goal_list, W, goals_disjunct=None,
@@ -627,7 +649,7 @@ def gen_dsoln_JTLV(init_list, goal_list, W, goals_disjunct=None,
     if len(init_list) == 0:
         return None
 
-    safety_str = LTL_world(W, var_prefix="s."+var_prefix)
+    safety_str = LTL_world_JTLV(W, var_prefix="s."+var_prefix)
 
     init_str = ""
     for loc in init_list:
@@ -880,7 +902,7 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
                                        local_goals[-1][1]-offset[1])
                 aut_patch = gen_dsoln(init_list=[init_loc], goal_list=patch_goal_list,
                                       W=W_patch, goals_disjunct=local_goals,
-                                      var_prefix=var_prefix, fname_prefix="tempsyn-"+str(l))
+                                      var_prefix=var_prefix)
                 if aut_patch is not None:
                     patch_auts.append((aut_patch, l, local_goals_IDs))
                 else:
@@ -971,7 +993,7 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                  env_init_list, restrict_radius=1,
                  num_obs=None,
                  num_steps=100,
-                 var_prefix="Y", env_prefix="X"):
+                 var_prefix="Y", env_prefix="X", use_JTLV=False):
     """Sister to btsim_d, but now for solutions from gen_navobs_soln.
     
     if num_obs is None, set it to len(env_init_list); this is a
@@ -1081,6 +1103,8 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                     local_goals_IDs = []  
                 else:
                     local_goals_IDs = list(aut.computeReach(l, Reg) & set(Exit))
+                if (l in local_goals_IDs) and (len(local_goals_IDs) > 1):
+                    del local_goals_IDs[local_goals_IDs.index(l)]
                 local_goals = []
                 for goal_ID in local_goals_IDs:
                     local_goals.append(extract_autcoord(aut.getAutState(goal_ID),
@@ -1088,14 +1112,24 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                     local_goals[-1] = (local_goals[-1][0]-offset[0],
                                        local_goals[-1][1]-offset[1])
                 local_goals = list(set(local_goals))  # Remove redundancy
-                aut_patch = gen_navobs_soln(init_list=[init_loc], goal_list=patch_goal_list,
-                                            W=W_patch, num_obs=num_obs,
-                                            env_init_list=local_env_init,
-                                            env_goal_list=patch_env_goal_list,
-                                            restrict_radius=restrict_radius,
-                                            goals_disjunct=local_goals,
-                                            var_prefix=var_prefix, env_prefix=env_prefix,
-                                            fname_prefix="tempsyn-"+str(l))
+                if use_JTLV:
+                    aut_patch = gen_navobs_soln_JTLV(init_list=[init_loc], goal_list=patch_goal_list,
+                                                     W=W_patch, num_obs=num_obs,
+                                                     env_init_list=local_env_init,
+                                                     env_goal_list=patch_env_goal_list,
+                                                     restrict_radius=restrict_radius,
+                                                     goals_disjunct=local_goals,
+                                                     var_prefix=var_prefix,
+                                                     env_prefix=env_prefix)
+                else:
+                    aut_patch = gen_navobs_soln(init_list=[init_loc], goal_list=patch_goal_list,
+                                                W=W_patch, num_obs=num_obs,
+                                                env_init_list=local_env_init,
+                                                env_goal_list=patch_env_goal_list,
+                                                restrict_radius=restrict_radius,
+                                                goals_disjunct=local_goals,
+                                                var_prefix=var_prefix,
+                                                env_prefix=env_prefix)
                 if aut_patch is not None:
                     patch_auts.append((aut_patch, l, local_goals_IDs))
                 else:
@@ -1166,33 +1200,15 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             l = patch_auts[aut_ind][1]
             Ml = patch_auts[aut_ind][0]
             local_goals_IDs = patch_auts[aut_ind][2]
-            entry_InSet = aut.getAutInSet(l)
+            entry_InSet = set(aut.getAutInSet(l)) - set(Reg)
             if len(entry_InSet) == 0:
                 S0 = set([S0_node for S0_node in S0 if S0_node.id != l])
                 S0 = S0|set([aut.getAutState(patch_id_maps[aut_ind][Ml_node.id]) for Ml_node in Ml.getAutInit()])
                 continue  # Special case of node for initial conditions
             match_list = Ml.findAllAutPartState(aut.getAutState(l).state)
-            if len(match_list) == 0:
-                import pdb; pdb.set_trace()
+            assert len(match_list) != 0
             for entry_prenode in entry_InSet:
                 entry_prenode.transition[entry_prenode.transition.index(l)] = patch_id_maps[aut_ind][match_list[0].id]
-            # entry_node = aut.getAutState(l)
-            # sys_state = prefix_filt(entry_node.state, prefix=var_prefix)
-            # match_list = Ml.findAllAutPartState(sys_state)
-            # if len(match_list) == 0:
-            #     raise Exception("FATAL")
-            # for match in match_list:
-            #     for k in range(len(entry_node.transition)):
-            #         next_node = aut.getAutState(entry_node.transition[k])
-            #         env_state = prefix_filt(next_node.state, prefix=env_prefix)
-            #         # Find environment (outward edge) labels that are consistent.
-            #         # Note that multiple matches leads to multiple overwrites, silently!
-            #         for j in range(len(match.transition)):
-            #             match_next = Ml.getAutState(match.transition[j])
-            #             if set(env_state.items()).issubset(set(match_next.state.items())):
-            #                 entry_node.transition[k] = patch_id_maps[aut_ind][match.transition[j]]
-            #                 entry_node.cond[k] = None
-
             if len(local_goals_IDs) == 0:
                 # Special case where it suffices to remain local
                 # forever (all system goals in here, etc.).
@@ -1202,7 +1218,8 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             for local_goal_ID in local_goals_IDs:
                 goal_node = aut.getAutState(local_goal_ID)
                 sys_state = prefix_filt(goal_node.state, prefix=var_prefix)
-                match_list = Ml.findAllAutPartState(sys_state)
+                # match_list = Ml.findAllAutPartState(sys_state)
+                match_list = Ml.findAllAutPartState(goal_node.state)
                 if len(match_list) > 0:
                     match_flag = True
                 for match_node in match_list:
@@ -1216,10 +1233,10 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond = [None for k in aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition]
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond.extend([None for k in goal_node.cond])
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition = goal_node.transition[:]
-                    
-                    
-            if not match_flag:
-                raise Exception("FATAL")
+                        if goal_node.id in goal_node.transition:
+                            aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition[aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition.index(goal_node.id)] = patch_id_maps[aut_ind][match_node.id]
+
+            assert match_flag
             
         # Delete blocked nodes and dependent edges
         kill_list = []

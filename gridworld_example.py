@@ -44,6 +44,14 @@ if __name__ == "__main__":
         aut.trimDeadStates()
         print "After trimming dead nodes, M has size %d" % aut.size()
 
+        history, intent, obs_poses = navobs_sim(init_list[0], aut, W,
+                                                num_obs=num_obs, num_it=30000)
+        print intent
+        print pretty_world(W, goal_list=goal_list, init_list=init_list,
+                           env_init_list=env_init_list,
+                           simresult=[history, intent, obs_poses])
+        for goal in goal_list:
+            print str(goal)+" -> "+str(len([x for x in history if x == goal]))
     
     aut.writeDotFileCoord("tempsyn-ORIG.dot")
     with open("tempsyn-ORIG.gexf", "w") as f:
@@ -62,7 +70,7 @@ if __name__ == "__main__":
     (aut_patched, W_patched) = btsim_navobs(init_list[0], goal_list,
                                             aut, W_actual,
                                             env_init_list=env_init_list,
-                                            num_steps=100)
+                                            num_steps=1000)
     if aut_patched is None:
         print "Global problem recovered while attempting to patch."
     else:
@@ -72,10 +80,12 @@ if __name__ == "__main__":
         print "Size after patching (in nodes):", aut_patched.size()
 
         history, intent, obs_poses = navobs_sim(init_list[0], aut_patched, W_actual,
-                                                num_obs=num_obs, num_it=300)
+                                                num_obs=num_obs, num_it=30000)
         print intent
         print pretty_world(W_actual, goal_list=goal_list, init_list=init_list,
                            env_init_list=env_init_list,
                            simresult=[history, intent, obs_poses])
 
-        print history
+        #print history
+        for goal in goal_list:
+            print str(goal)+" -> "+str(len([x for x in history if x == goal]))

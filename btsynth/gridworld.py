@@ -433,7 +433,7 @@ def LTL_world(W, var_prefix="obs",
         if outer_ind != (-1, -1) and W[outer_ind[0]][outer_ind[1]] == 1:
             continue
         if not first_subformula:
-            out_trans[-1] += " | "
+            out_trans[-1] += "\n| "
         if outer_ind == (-1, -1):
             out_trans[-1] += "(" + var_prefix+"_n_n'"
         else:
