@@ -1066,15 +1066,14 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             Entry = list(aut.findEntry(Reg))
             Exit = aut.findExit(Reg)
 
-            # Remove newly blocked possibilities for dynamic obstacle
-            # positions.
+            # Remove newly blocked possibilities for dynamic obstacle positions.
             for env_i in range(len(env_init_list)):
                 env_i_prefix = env_prefix+"_"+str(env_i)
                 Init = set([ind for ind in Init if extract_autcoord(aut.states[ind], var_prefix=env_i_prefix)[0] != intent])
                 Entry = set([ind for ind in Entry if extract_autcoord(aut.states[ind], var_prefix=env_i_prefix)[0] != intent])
             
             if len(Reg) == aut.size():
-                print "WARNING: arrived at global problem, i.e. S = Reg."
+                print "WARNING: arrived at global problem, i.e., S = Reg."
                 return None, None
             
             W_patch, offset = subworld(W_actual, nbhd_inclusion)
@@ -1178,8 +1177,9 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                     if not node.state.has_key(k):
                         node.state[k] = 0
             for obs in range(num_obs):
-                Ml.fleshOutGridState(env_vars_list[obs],
-                                     special_var=env_nowhere_vars[obs])
+                if env_nowhere_vars[obs] in Ml.states[0].state.keys():
+                    Ml.fleshOutGridState(env_vars_list[obs],
+                                         special_var=env_nowhere_vars[obs])
             for node in Ml.states:
                 node.addNodeRule(rule_setmatch)
 
@@ -1204,11 +1204,11 @@ def btsim_navobs(init, goal_list, aut, W_actual,
             if len(entry_InSet) == 0:
                 S0 = set([S0_node for S0_node in S0 if S0_node.id != l])
                 S0 = S0|set([aut.getAutState(patch_id_maps[aut_ind][Ml_node.id]) for Ml_node in Ml.getAutInit()])
-                continue  # Special case of node for initial conditions
-            match_list = Ml.findAllAutPartState(aut.getAutState(l).state)
-            assert len(match_list) != 0
-            for entry_prenode in entry_InSet:
-                entry_prenode.transition[entry_prenode.transition.index(l)] = patch_id_maps[aut_ind][match_list[0].id]
+            else:
+                match_list = Ml.findAllAutPartState(aut.getAutState(l).state)
+                assert len(match_list) != 0
+                for entry_prenode in entry_InSet:
+                    entry_prenode.transition[entry_prenode.transition.index(l)] = patch_id_maps[aut_ind][match_list[0].id]
             if len(local_goals_IDs) == 0:
                 # Special case where it suffices to remain local
                 # forever (all system goals in here, etc.).
@@ -1229,6 +1229,8 @@ def btsim_navobs(init, goal_list, aut, W_actual,
                                 aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond[k] = cond_anynot
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond.extend([cond_all for k in goal_node.cond])
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition.extend(goal_node.transition)
+                        if goal_node.id in goal_node.transition:
+                            aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition[aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition.index(goal_node.id)] = patch_id_maps[aut_ind][match_node.id]
                     else:
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond = [None for k in aut.getAutState(patch_id_maps[aut_ind][match_node.id]).transition]
                         aut.getAutState(patch_id_maps[aut_ind][match_node.id]).cond.extend([None for k in goal_node.cond])

@@ -32,7 +32,7 @@ if __name__ == "__main__":
             print "Not a possible trial number."
             print USAGE
             exit(1)
-        if req_trial < 0 or req_trial >= len(valid_trials):
+        if req_trial < 0 or req_trial >= len(times):
             print "Requested trial number "+str(req_trial)+" is out of range (max is "+str(len(times)-1)+")."
             exit(1)
     else:

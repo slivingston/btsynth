@@ -45,7 +45,7 @@ if __name__ == "__main__":
         print "After trimming dead nodes, M has size %d" % aut.size()
 
         history, intent, obs_poses = navobs_sim(init_list[0], aut, W,
-                                                num_obs=num_obs, num_it=30000)
+                                                num_obs=num_obs, num_it=1000)
         print intent
         print pretty_world(W, goal_list=goal_list, init_list=init_list,
                            env_init_list=env_init_list,
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         print "Size after patching (in nodes):", aut_patched.size()
 
         history, intent, obs_poses = navobs_sim(init_list[0], aut_patched, W_actual,
-                                                num_obs=num_obs, num_it=30000)
+                                                num_obs=num_obs, num_it=1000)
         print intent
         print pretty_world(W_actual, goal_list=goal_list, init_list=init_list,
                            env_init_list=env_init_list,
