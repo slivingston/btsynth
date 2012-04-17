@@ -7,6 +7,7 @@ setup(name='btsynth',
       version=version,
       author='Scott C. Livingston',
       author_email='slivingston@caltech.edu',
+      license="BSD",
       url='http://scottman.net/2012/btsynth',
       packages=['btsynth'],
       )
