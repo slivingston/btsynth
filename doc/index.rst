@@ -14,4 +14,4 @@ Contents:
 References
 ==========
 
-.. [1] `Backtracking temporal logic synthesis for uncertain environments <http://scottman.net/pub/Livingston-Murray-Burdick-ICRA2012.pdf>`_, S.C. Livingston, R.M. Murray, J.W. Burdick, to appear in Proc. of IEEE Int'l Conf. on Robotics and Automation (ICRA), May 2012.
+.. [1] `Backtracking temporal logic synthesis for uncertain environments <http://scottman.net/pub/Livingston-Murray-Burdick-ICRA2012.pdf>`_, S.C. Livingston, R.M. Murray, J.W. Burdick, in Proc. of IEEE Int'l Conf. on Robotics and Automation (ICRA), pp. 5163--5170, May 2012.
