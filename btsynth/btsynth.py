@@ -827,7 +827,7 @@ def btsim_d(init, goal_list, aut, W_actual, num_steps=100, var_prefix="Y"):
 
     Returns an updated (to reflect the corrected controller)
     instance of btsynth.BTAutomaton and the known world map at
-    time of completion.  Note that the ``known world'' may not match
+    time of completion.  Note that the "known world" may not match
     the given W_actual, because some parts of the world may never be
     visited (hence, uncertainty not corrected).
 

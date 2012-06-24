@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Print ``pretty'' diagrams, given world files.
+Print "pretty" diagrams, given world files.
 
 SCL; Aug 2011, Feb 2012.
 """

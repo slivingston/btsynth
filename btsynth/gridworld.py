@@ -330,14 +330,14 @@ def LTL_world(W, var_prefix="obs",
     matrix; 1 == 1 step by row or column), a restricted region of
     movement for the object is specified.  If part of the restricted
     region is outside the given world, then we must allow a movement
-    to nowhere (i.e. ``out of the world W'') and movements back into
+    to nowhere (i.e. "out of the world W") and movements back into
     W, where such transitions can occur along the boundary of W at
     which the restricted region leaves W.  Since the restricted region
     is compact and connected, transitions to/from nowhere can happen
-    anywhere along this boundary (so, you might view ``nowhere'' as a
+    anywhere along this boundary (so, you might view "nowhere" as a
     special location connected to all this overflow positions).
 
-    ``nowhere'' has the position (-1, -1).
+    "nowhere" has the position (-1, -1).
 
     Return the formula as a list of transition rules, which can be
     used directly in building a specification in a GRSpec object
@@ -391,7 +391,7 @@ def LTL_world(W, var_prefix="obs",
                 out_trans[-1] += " | " + var_prefix+"_"+str(i+1)+"_"+str(j)+"'"
             if j < col_high and W[i][j+1] == 0:
                 out_trans[-1] += " | " + var_prefix+"_"+str(i)+"_"+str(j+1)+"'"
-            # Transitions to ``nowhere'':
+            # Transitions to "nowhere":
             if ((i == row_low and nowhere[0])
                 or (i == row_high and nowhere[1])
                 or (j == col_low and nowhere[2])
@@ -399,7 +399,7 @@ def LTL_world(W, var_prefix="obs",
                 out_trans[-1] += " | " + var_prefix+"_n_n'"
             out_trans[-1] += ")"
     if nowhere[0] or nowhere[1] or nowhere[2] or nowhere[3]:
-        # Add transitions from ``nowhere''
+        # Add transitions from "nowhere"
         out_trans.append(var_prefix+"_n_n"+" -> (")
         out_trans[-1] += var_prefix+"_n_n'"
         if not always_nowhere_flag:
@@ -469,14 +469,14 @@ def LTL_world_JTLV(W, var_prefix="obs",
     matrix; 1 == 1 step by row or column), a restricted region of
     movement for the object is specified.  If part of the restricted
     region is outside the given world, then we must allow a movement
-    to nowhere (i.e. ``out of the world W'') and movements back into
+    to nowhere (i.e. "out of the world W") and movements back into
     W, where such transitions can occur along the boundary of W at
     which the restricted region leaves W.  Since the restricted region
     is compact and connected, transitions to/from nowhere can happen
-    anywhere along this boundary (so, you might view ``nowhere'' as a
+    anywhere along this boundary (so, you might view "nowhere" as a
     special location connected to all this overflow positions).
 
-    ``nowhere'' has the position (-1, -1).
+    "nowhere" has the position (-1, -1).
 
     Return the formula string on success; None if failure.
     """
@@ -531,7 +531,7 @@ def LTL_world_JTLV(W, var_prefix="obs",
                 out_str += " | " + var_prefix+"_"+str(i+1)+"_"+str(j)
             if j < col_high and W[i][j+1] == 0:
                 out_str += " | " + var_prefix+"_"+str(i)+"_"+str(j+1)
-            # Transitions to ``nowhere'':
+            # Transitions to "nowhere":
             if ((i == row_low and nowhere[0])
                 or (i == row_high and nowhere[1])
                 or (j == col_low and nowhere[2])
@@ -540,7 +540,7 @@ def LTL_world_JTLV(W, var_prefix="obs",
             out_str += "))"
             first_subformula = False
     if nowhere[0] or nowhere[1] or nowhere[2] or nowhere[3]:
-        # Add transitions from ``nowhere''
+        # Add transitions from "nowhere"
         if not first_subformula:
             out_str += " &\n\t"
         out_str += "[]("+var_prefix+"_n_n"+" -> next("
@@ -651,7 +651,7 @@ def extract_coord(var_name):
 
     prefix is of type string, row and column are integers.
 
-    The ``nowhere'' coordinate has form prefix_n_n. To indicate this,
+    The "nowhere" coordinate has form prefix_n_n. To indicate this,
     (-1, -1) is returned as the row, column position.
 
     If error, return None or throw exception.
@@ -663,7 +663,7 @@ def extract_coord(var_name):
         return None
     try:
         if name_frags[-1] == "n" and name_frags[-2] == "n":
-            # Special ``nowhere'' case
+            # Special "nowhere" case
             return ("_".join(name_frags[:-2]), -1, -1)
         col = int(name_frags[-1])
         row = int(name_frags[-2])

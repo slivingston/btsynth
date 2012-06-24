@@ -3,7 +3,7 @@ Introduction
 
 Scott C. Livingston  <slivingston@caltech.edu>
 
-**btsynth** is an implementation of the ``backtracking synthesis''
+**btsynth** is an implementation of the "backtracking synthesis"
 algorithm, currently only applied to gridworlds. The dependencies
 include `TuLiP <http://tulip-control.sourceforge.net/>`_ and `NumPy
 <http://numpy.org/>`_.

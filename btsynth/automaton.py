@@ -21,22 +21,22 @@ class BTAutomatonNode(tulip.automaton.AutomatonState):
 
     As in the class tulip.AutomatonState, each node here has a
     transition attribute.  Each transition also has a corresponding
-    callable (or None) that makes it ``enabled'' or ``unenabled''
+    callable (or None) that makes it "enabled" or "unenabled"
     depending on the contents of memory.  These callables are
-    maintained in the attribute ``cond'', which is kept in order with
-    ``transition'' such that the k-th element of self.transition
+    maintained in the attribute "cond", which is kept in order with
+    "transition" such that the k-th element of self.transition
     corresponds to the k-th element of self.cond
 
     If the entry in self.cond for a transition is None, then it is
-    automatically ``enabled''.  By default, all
+    automatically "enabled".  By default, all
     transition-conditionals are set to None.
 
     Let conf_func be an element of self.cond.  Then conf_func is
-    called as conf_func(memory), where ``memory'' is the contents of
+    called as conf_func(memory), where "memory" is the contents of
     the automaton finite memory.  conf_func should return True if the
     edge is enabled, and False otherwise.
 
-    The ``tags'' attribute is used to associate extra data to the
+    The "tags" attribute is used to associate extra data to the
     node, such as coloring or size to use when visualizing the
     automaton. If not used, tags is None; otherwise tags is a
     dictionary.
@@ -95,11 +95,11 @@ class BTAutomatonNode(tulip.automaton.AutomatonState):
               states of environment-controlled variables, e.g. as
               given in the arguments to method execNextAutState.
 
-        ``rule'' is then expected to return the new memory contents
+        "rule" is then expected to return the new memory contents
         (actually, a new dictionary), or raise an exception on error.
 
-        The one case in which ``rule'' can be not callable is as
-        None. A ``rule'' of None means ``do nothing'' (i.e. leave
+        The one case in which "rule" can be not callable is as
+        None. A "rule" of None means "do nothing" (i.e. leave
         automaton memory unchanged).
 
         If given rule is not callable (and not None), then do not
@@ -279,7 +279,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         each one of these be true while satisfying mutex.
 
         e.g., if node state has special_var (call it fooM) set (or
-        ``true'') and is missing 3 variables (call them foo1, foo2,
+        "true") and is missing 3 variables (call them foo1, foo2,
         foo3) from nominal_vars, then expand this node into 4 new
         nodes, each of these having precisely one of foo1, foo2, foo3,
         fooM true. Also adjust all incoming edges to original node to
@@ -341,7 +341,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         S0 should be a list of nodes (not IDs!).
 
         During patching, some nodes may become orphaned, etc. This
-        method keeps repeating removal of apparent ``init'' nodes that
+        method keeps repeating removal of apparent "init" nodes that
         do not appear in S0 until no such nodes are found.
 
         Does *not* re-map IDs.
@@ -367,7 +367,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         accordingly.
 
         During import, all nodes originating from given aut object are
-        marked with ``tags''. Default is None (no tag).
+        marked with "tags". Default is None (no tag).
 
         Return the ID map, showing how IDs in given automaton map into
         this one. Raise exception on error.
@@ -434,7 +434,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         return copy.copy(self.memory)
 
     def triggerRule(self, prev_node_id, node_id, env_state):
-        """Call ``rule'' of a node. Return True on success, else raise exception.
+        """Call "rule" of a node. Return True on success, else raise exception.
         """
         node = self.getAutState(node_id)
         if node == -1:
@@ -452,7 +452,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         return True
 
     def addGroupRule(self, ID_list, rule):
-        """Set node rules to ``rule'' for all nodes in ID_list.
+        """Set node rules to "rule" for all nodes in ID_list.
 
         ...similar behavior to addGroupCondition.
         """
@@ -473,7 +473,7 @@ class BTAutomaton(tulip.automaton.Automaton):
            resolve the conflict;
 
         3. once next node selected (whether or not cond was called),
-           simulate ``taking'' the corresponding transition by
+           simulate "taking" the corresponding transition by
            applying the rule of the next node, given the environment
            state and memory that resulted in the transition.
 
@@ -481,7 +481,7 @@ class BTAutomaton(tulip.automaton.Automaton):
         determine the environment variables (and the values of
         env_state are ignored).  One of the outgoing transitions from
         node_id is randomly (uniform probability) selected, the
-        environment state (or ``valuation'') in the next node is found
+        environment state (or "valuation") in the next node is found
         and set to env_state, and then this method proceeds as usual.
         The default is randNext = False.
         
@@ -495,7 +495,7 @@ class BTAutomaton(tulip.automaton.Automaton):
 
         QUIRK 1: to avoid halting, transition-conditionals are only
         invoked if more than one transition is possible; i.e., an
-        ``unenabled'' edge could be taken if it otherwise has the
+        "unenabled" edge could be taken if it otherwise has the
         correct label (environment valuation) and is the only such
         edge.
 
@@ -560,7 +560,7 @@ class BTAutomaton(tulip.automaton.Automaton):
 
         var_prefix is the prefix used in position variable naming.
 
-        nbhd is a list of positions, the ``abstract neighborhood''
+        nbhd is a list of positions, the "abstract neighborhood"
         (for gridworld, a list of (row, column) pairs).
 
         Combining these two, and assuming the naming scheme
